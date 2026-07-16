@@ -20,10 +20,12 @@ Tunnel (no card), Hetzner €4 (PayPal).
       TODO USER: repo Settings -> Code security -> enable Push protection.
       **Check:** repo online; `git status` clean; key scan of staged files
       empty. Push-protection live test pending user enabling it.
-- [ ] 1.2 Extract `core/` package (pipeline, vocab_common, build_pdf,
-      extract) with pytest tests for: levels math, morphology lookup,
-      page cache keying.
-      **Check:** `pytest` green; old server.py still works via imports.
+- [x] 1.2 2026-07-16: `core/` package = core/pipeline.py + core/vocab.py
+      (root pipeline.py / vocab_common.py are shims; analyze + simplify_page
+      stay at root as the legacy Celestina engine, wrapped later). 15 pytest
+      tests: morphology lookup, vocab modes, level math, cache keying.
+      **Check:** PASSED — 15/15 green; site stats/reader/pdf.html identical
+      through shims (levels 202/1109/3839 unchanged).
 - [ ] 1.3 FastAPI skeleton: /health, /me (stub JWT, single local user),
       OpenAPI docs page.
       **Check:** `curl /health` = ok; /docs renders.
