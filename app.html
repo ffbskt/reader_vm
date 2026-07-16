@@ -309,12 +309,18 @@ async function updateReadPdf(){
   if (!book) return;
   const d = await api('/books');
   const b = d.books.find(x => x.slug === book);
-  const n = b ? (b.done_pages[level] || 0) : 0;
+  const dp = b ? b.done_pages : {};
+  const n = dp[level] || 0;
   $('readLink').href = `reader_site.html?book=${book}&level=${level}`;
-  $('readInfo').textContent = n ? ` ${n} page(s) ready at level ${level}` :
-    ' no pages translated at this level yet';
-  $('s5').classList.toggle('dis', !n);
-  $('s6').classList.toggle('dis', !n);
+  const shelves = [0, 25, 50, 75].filter(l => dp[l]).map(l =>
+    `<a href="reader_site.html?book=${book}&level=${l}"
+        ${l === level ? 'style="font-weight:700"' : ''}>level ${l} ·
+        ${dp[l]} p.</a>`).join(' &nbsp;·&nbsp; ');
+  $('readInfo').innerHTML = shelves ?
+    ` translated so far: ${shelves}` :
+    ' no pages translated yet — run step 4';
+  if (!n && !shelves) { $('s5').classList.add('dis'); $('s6').classList.add('dis'); }
+  else { $('s5').classList.remove('dis'); $('s6').classList.toggle('dis', !n); }
 }
 function renderPdfModes(){
   $('pdfModes').innerHTML = PDF_MODES.map(([m, name, txt]) =>
