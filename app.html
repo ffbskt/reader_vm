@@ -192,11 +192,12 @@ async function refreshKnown(){
 $('knownUp').onclick = async () => {
   const files = $('knownFile').files;
   if (!files.length) return $('knownMsg').textContent = 'choose a file first';
-  $('knownMsg').textContent = '';
+  $('knownMsg').textContent = 'uploading & analyzing… (a big PDF can take '
+    + 'a few minutes on the small server)';
   for (const f of files){
     const d = await api('/known?name=' + encodeURIComponent(f.name),
                         {method: 'POST', body: f});
-    if (d.error) $('knownMsg').textContent = d.error;
+    $('knownMsg').textContent = d.error || '';
   }
   refreshKnown(); if (book) loadStats();
 };
@@ -211,7 +212,8 @@ async function refreshBooks(sel){
 $('bookUp').onclick = async () => {
   const f = $('bookFile').files[0];
   if (!f) return $('bookMsg').textContent = 'choose a file first';
-  $('bookMsg').textContent = 'uploading…';
+  $('bookMsg').textContent = 'uploading & analyzing… (a big PDF can take '
+    + 'a few minutes on the small server)';
   const d = await api('/books?name=' + encodeURIComponent(f.name),
                       {method: 'POST', body: f});
   $('bookMsg').textContent = d.error || '';

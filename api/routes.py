@@ -11,6 +11,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -19,7 +20,9 @@ from api.auth import get_current_user
 from core import pipeline
 from core.vocab import MODES
 
-MAX_UPLOAD = 200 * 1024 * 1024
+# 50 MB: plenty for book PDFs, and the whole body is held in RAM on a
+# 1 GB machine
+MAX_UPLOAD = 50 * 1024 * 1024
 
 router = APIRouter()
 
@@ -46,7 +49,8 @@ async def upload_known(request: Request, name: str = Query(...),
     """Add a source: PDF/TXT of a finished book, or a plain word list."""
     blob = await read_upload(request)
     try:
-        info = pipeline.add_known_source(name, blob)
+        # PDF parsing is CPU-heavy: threadpool, NEVER the event loop
+        info = await run_in_threadpool(pipeline.add_known_source, name, blob)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {**info, **known_overview()}
@@ -67,7 +71,8 @@ async def upload_book(request: Request, name: str = Query(...),
     """Upload the book to simplify (PDF, or TXT with/without page markers)."""
     blob = await read_upload(request)
     try:
-        return pipeline.add_book(name, blob)
+        # PDF parsing is CPU-heavy: threadpool, NEVER the event loop
+        return await run_in_threadpool(pipeline.add_book, name, blob)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
