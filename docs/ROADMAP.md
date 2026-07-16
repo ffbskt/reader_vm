@@ -14,10 +14,12 @@ Tunnel (no card), Hetzner €4 (PayPal).
 
 ## Phase 1 — split core / API / frontend (local, no server needed)
 
-- [ ] 1.1 `git init` + public GitHub repo, .gitignore (data/, *.env, keys),
-      MIT LICENSE, README. Enable push protection + secret scanning.
-      **Check:** repo online; `git status` clean; a fake key in a test commit
-      is BLOCKED by GitHub push protection.
+- [x] 1.1 `git init` + public GitHub repo, .gitignore (data/, *.env, keys),
+      LICENSE (GPL-3.0, user's choice), README. 2026-07-16:
+      https://github.com/ffbskt/reader_vm — pushed, no secrets in history.
+      TODO USER: repo Settings -> Code security -> enable Push protection.
+      **Check:** repo online; `git status` clean; key scan of staged files
+      empty. Push-protection live test pending user enabling it.
 - [ ] 1.2 Extract `core/` package (pipeline, vocab_common, build_pdf,
       extract) with pytest tests for: levels math, morphology lookup,
       page cache keying.
