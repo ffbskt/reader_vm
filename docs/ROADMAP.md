@@ -113,9 +113,16 @@ Tunnel (no card), Hetzner €4 (PayPal).
       counters + `quota` job status handling in the UI.
       **Check:** set limit=2 pages in test config, run 3-page job -> pauses
       politely, resumes after reset.
-- [ ] 2b.3 Telegram bot: send PDF = upload book, /stats, /level, /translate
-      (progress by editing one message), /pdf mode buttons.
-      **Check:** full flow from the phone, no browser involved.
+- [x] 2b.3 2026-07-16: bot/bot.py — thin API client (long polling, no
+      public port), bot container in compose. POST /auth/telegram (shared
+      TELEGRAM_BOT_SECRET) maps tg_id -> user; OWNER_TG_ID claims user 1.
+      Send PDF/TXT -> book|known buttons; /books /stats /level /translate
+      (one message edited as a progress bar) /read /pdf (document reply).
+      Also fixed on the way: db connections now closed + WAL (worker
+      leaked one every 2 s -> "database is locked"); 2b.1 also done live
+      (Google sign-in verified by user, header shows email).
+      **Check:** deployed, bot polling ("bot up"); PENDING USER — full
+      flow from the phone: /start, /books, /translate, /pdf.
 - [x] 2b.4 2026-07-16: deploy/monitor.py on the VM (cron */5 as root):
       disk >85%, memory <100 MB, /health, stuck jobs (>15 min silent),
       failed/quota jobs -> Telegram alerts to the user's chat (bot
