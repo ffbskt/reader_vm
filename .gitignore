@@ -1,6 +1,8 @@
 # secrets — NEVER commit keys
 API_KEY.txt
 gemini_key.txt
+telegram_token.txt
+TELEGRAM_TOKENS.txt
 *.env
 .env*
 
