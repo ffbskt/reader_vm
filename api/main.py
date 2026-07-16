@@ -50,6 +50,18 @@ def auth_config():
     from api.auth import GOOGLE_CLIENT_ID
     return {"google_client_id": GOOGLE_CLIENT_ID}
 
+@app.post("/auth/telegram", tags=["auth"])
+def auth_telegram(body: dict):
+    """Bot-only: exchange a Telegram user id for a session JWT."""
+    from api.auth import login_telegram
+    try:
+        return login_telegram(int(body.get("tg_id", 0)),
+                              str(body.get("name", "")),
+                              str(body.get("bot_secret", "")))
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(401, str(e))
+
 @app.post("/auth/google", tags=["auth"])
 def auth_google(body: dict):
     """Exchange a verified Google ID token for our session JWT."""

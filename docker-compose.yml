@@ -9,6 +9,19 @@ services:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
 
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "bot/bot.py"]
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
   caddy:
     image: caddy:2
     restart: unless-stopped

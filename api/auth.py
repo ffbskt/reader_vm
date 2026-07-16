@@ -76,6 +76,25 @@ def login_google(id_tok: str) -> dict:
             user = db.create_google_user(sub, email, name)
     return {"token": mint_jwt(user["id"]), "user": public_user(user)}
 
+TELEGRAM_BOT_SECRET = os.environ.get("TELEGRAM_BOT_SECRET", "")
+OWNER_TG_ID = int(os.environ.get("OWNER_TG_ID", "0") or 0)
+
+def login_telegram(tg_id: int, name: str, bot_secret: str) -> dict:
+    """The bot (and only the bot — shared secret) exchanges a chat's
+    tg_id for a session JWT. Owner tg_id claims user 1."""
+    from api import db
+    if not TELEGRAM_BOT_SECRET or bot_secret != TELEGRAM_BOT_SECRET:
+        raise ValueError("bad bot secret")
+    user = db.user_by_tg_id(tg_id)
+    if user is None:
+        owner = db.get_user(1)
+        if OWNER_TG_ID and tg_id == OWNER_TG_ID \
+                and owner and not owner.get("tg_id"):
+            user = db.attach_tg(1, tg_id, name)
+        else:
+            user = db.create_tg_user(tg_id, name)
+    return {"token": mint_jwt(user["id"]), "user": public_user(user)}
+
 def public_user(user: dict) -> dict:
     return {"id": user["id"], "email": user.get("email"),
             "name": user.get("name"), "tier": user.get("tier", "free")}

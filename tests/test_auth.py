@@ -44,6 +44,19 @@ def test_other_email_becomes_new_user_and_is_stable(monkeypatch):
     b = client.post("/auth/google", json={"id_token": "x"}).json()
     assert a["user"]["id"] == b["user"]["id"] != 1
 
+def test_telegram_login_owner_and_secret(monkeypatch):
+    monkeypatch.setattr(auth, "TELEGRAM_BOT_SECRET", "s3cr3t")
+    monkeypatch.setattr(auth, "OWNER_TG_ID", 318973541)
+    bad = client.post("/auth/telegram", json={
+        "tg_id": 1, "name": "x", "bot_secret": "wrong"})
+    assert bad.status_code == 401
+    own = client.post("/auth/telegram", json={
+        "tg_id": 318973541, "name": "D", "bot_secret": "s3cr3t"}).json()
+    assert own["user"]["id"] == 1
+    other = client.post("/auth/telegram", json={
+        "tg_id": 999, "name": "f", "bot_secret": "s3cr3t"}).json()
+    assert other["user"]["id"] != 1
+
 def test_bad_google_token_is_401(monkeypatch):
     def boom(tok):
         raise ValueError("bad token")

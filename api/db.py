@@ -13,9 +13,11 @@ if os.name == "nt":                      # Anaconda quirk: sqlite3.dll lives
         os.environ["PATH"] = _lib + os.pathsep + \
             os.environ.get("PATH", "")                       # not activated
 
-import json, sqlite3, time
+import contextlib, json, sqlite3, time
 
 from core import pipeline
+
+_initialized = set()      # db paths whose schema has been created
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(
@@ -59,13 +61,18 @@ CREATE INDEX IF NOT EXISTS idx_events_job ON job_events(job_id);
 
 def get_db():
     os.makedirs(pipeline.SITE, exist_ok=True)
-    con = sqlite3.connect(os.path.join(pipeline.SITE, "app.db"), timeout=30)
+    path = os.path.join(pipeline.SITE, "app.db")
+    con = sqlite3.connect(path, timeout=30)
     con.row_factory = sqlite3.Row
-    con.executescript(SCHEMA)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=30000")
+    if path not in _initialized:
+        con.executescript(SCHEMA)
+        _initialized.add(path)
     return con
 
 def create_job(user_id, book_slug, level, page_from, page_to):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         cur = con.execute(
             "INSERT INTO jobs(user_id, book_slug, level, page_from, page_to,"
             " total, created_at) VALUES(?,?,?,?,?,?,?)",
@@ -75,7 +82,7 @@ def create_job(user_id, book_slug, level, page_from, page_to):
 
 def claim_next_job():
     """Atomically take the oldest queued job (the input queue, FIFO)."""
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         row = con.execute("SELECT * FROM jobs WHERE status='queued' "
                           "ORDER BY id LIMIT 1").fetchone()
         if row is None:
@@ -87,12 +94,12 @@ def claim_next_job():
 
 def update_job(job_id, **fields):
     keys = ", ".join(f"{k}=?" for k in fields)
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         con.execute(f"UPDATE jobs SET {keys} WHERE id=?",
                     (*fields.values(), job_id))
 
 def add_event(job_id, etype, payload=None):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         con.execute("INSERT INTO job_events(job_id, ts, type, payload) "
                     "VALUES(?,?,?,?)",
                     (job_id, time.time(), etype,
@@ -100,7 +107,7 @@ def add_event(job_id, etype, payload=None):
                      if payload is not None else None))
 
 def get_job(job_id, events_limit=20):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         row = con.execute("SELECT * FROM jobs WHERE id=?",
                           (job_id,)).fetchone()
         if row is None:
@@ -117,32 +124,51 @@ def get_job(job_id, events_limit=20):
         return job
 
 def latest_job_for(book_slug, user_id):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         row = con.execute(
             "SELECT id FROM jobs WHERE book_slug=? AND user_id=? "
             "ORDER BY id DESC LIMIT 1", (book_slug, user_id)).fetchone()
         return get_job(row["id"]) if row else None
 
 def get_user(user_id):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         row = con.execute("SELECT * FROM users WHERE id=?",
                           (user_id,)).fetchone()
         return dict(row) if row else None
 
 def user_by_google_sub(sub):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         row = con.execute("SELECT * FROM users WHERE google_sub=?",
                           (sub,)).fetchone()
         return dict(row) if row else None
 
 def attach_google(user_id, sub, email, name):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         con.execute("UPDATE users SET google_sub=?, email=?, name=? "
                     "WHERE id=?", (sub, email, name, user_id))
     return get_user(user_id)
 
+def user_by_tg_id(tg_id):
+    with contextlib.closing(get_db()) as con, con:
+        row = con.execute("SELECT * FROM users WHERE tg_id=?",
+                          (tg_id,)).fetchone()
+        return dict(row) if row else None
+
+def attach_tg(user_id, tg_id, name):
+    with contextlib.closing(get_db()) as con, con:
+        con.execute("UPDATE users SET tg_id=?, name=COALESCE(name,?) "
+                    "WHERE id=?", (tg_id, name, user_id))
+    return get_user(user_id)
+
+def create_tg_user(tg_id, name):
+    with contextlib.closing(get_db()) as con, con:
+        cur = con.execute("INSERT INTO users(created_at, tg_id, name) "
+                          "VALUES(?,?,?)", (time.time(), tg_id, name))
+        uid = cur.lastrowid
+    return get_user(uid)     # outside the write txn: no self-deadlock
+
 def create_google_user(sub, email, name):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         cur = con.execute(
             "INSERT INTO users(created_at, email, google_sub, name) "
             "VALUES(?,?,?,?)", (time.time(), email, sub, name))
@@ -150,7 +176,7 @@ def create_google_user(sub, email, name):
     return get_user(uid)     # outside the write txn: no self-deadlock
 
 def active_job_for(book_slug, level, user_id):
-    with get_db() as con:
+    with contextlib.closing(get_db()) as con, con:
         row = con.execute(
             "SELECT id FROM jobs WHERE book_slug=? AND level=? AND user_id=?"
             " AND status IN ('queued','running') LIMIT 1",
