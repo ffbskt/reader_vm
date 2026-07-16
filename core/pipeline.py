@@ -156,6 +156,10 @@ def list_books():
                 m = json.load(open(mp, encoding="utf-8"))
                 m["done_pages"] = {
                     lv: len(cached_pages(slug, lv)) for lv in LEVELS}
+                sd = os.path.join(BOOKS_DIR, slug, "simplified")
+                times = [os.path.getmtime(os.path.join(sd, f))
+                         for f in os.listdir(sd)] if os.path.isdir(sd) else []
+                m["updated"] = max(times) if times else os.path.getmtime(mp)
                 out.append(m)
     return out
 

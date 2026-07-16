@@ -70,6 +70,20 @@ select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6
 .okmsg{color:var(--ok);font-size:.9rem}
 .dis{opacity:.5;pointer-events:none}
 a.readlink{color:var(--accent);font-weight:600}
+.btn-ghost{border:1px solid var(--line);background:transparent;font:inherit;
+  color:var(--muted);border-radius:6px;padding:5px 14px;cursor:pointer}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.userchip{background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:4px 14px;color:var(--ink)}
+.bookcards{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 4px}
+.bcard{border:2px solid var(--line);border-radius:8px;padding:10px 16px;
+  background:var(--panel);cursor:pointer;min-width:170px;text-align:left;
+  font:inherit;color:var(--ink)}
+.bcard:hover{border-color:var(--accent)}
+.bcard.on{border-color:var(--accent);background:var(--panel2)}
+.bcard b{display:block;margin-bottom:2px}
+.bcard span{font-size:.75rem;color:var(--muted);display:block}
+.bcard .go{color:var(--accent);font-size:.8rem;font-weight:600;margin-top:4px}
 </style>
 
 <div class="wrap">
@@ -80,13 +94,19 @@ a.readlink{color:var(--accent);font-weight:600}
 upload a hard book, choose how much difficulty to keep, translate it with
 Gemini, then read online with hover translations or download a PDF.</p>
 
+<!-- continue reading: recent books, one tap to the reader -->
+<div class="step" id="contBox" style="display:none">
+  <h2>📖 Continue reading</h2>
+  <div class="bookcards" id="contList"></div>
+</div>
+
 <!-- 1 ─ known vocabulary -->
 <div class="step" id="s1">
   <h2><span class="no">1</span>Your known vocabulary</h2>
   <p class="hint">Upload books you have already read (PDF/TXT — words used
   2+ times count as known) or a plain word list (one word per line).</p>
-  <input type="file" id="knownFile" multiple accept=".pdf,.txt,.csv,.md">
-  <button class="btn sec" id="knownUp">Upload</button>
+  <input type="file" id="knownFile" multiple accept=".pdf,.txt,.csv,.md" hidden>
+  <button class="btn" id="knownUp">＋ Add book or word list</button>
   <span id="knownMsg" class="err"></span>
   <ul class="srcs" id="knownList"></ul>
   <div class="tiles"><div class="tile"><b id="knownTotal">0</b>
@@ -98,10 +118,10 @@ Gemini, then read online with hover translations or download a PDF.</p>
   <h2><span class="no">2</span>The hard book you want to read</h2>
   <p class="hint">Upload the target book (PDF/TXT), then check the coverage:
   a random 30 of its unknown words and per-page difficulty.</p>
-  <input type="file" id="bookFile" accept=".pdf,.txt">
-  <button class="btn sec" id="bookUp">Upload</button>
-  <select id="bookSel"></select>
+  <input type="file" id="bookFile" accept=".pdf,.txt" hidden>
+  <button class="btn" id="bookUp">＋ Upload a new book</button>
   <span id="bookMsg" class="err"></span>
+  <div class="bookcards" id="bookCards"></div>
   <div id="stats" style="display:none">
     <div class="tiles">
       <div class="tile"><b id="stCov"></b><span>token coverage</span></div>
@@ -153,7 +173,9 @@ Gemini, then read online with hover translations or download a PDF.</p>
   <h2><span class="no">6</span>Download PDF</h2>
   <div class="modes" id="pdfModes"></div>
   <button class="btn" id="goPdf">Build &amp; download PDF</button>
-  <span class="err" id="pdfMsg"></span>
+  <span class="jobline" id="pdfMsg"></span>
+  <div class="bar" id="pdfBarWrap" style="display:none"><i id="pdfBar"></i></div>
+  <div class="err" id="pdfErr"></div>
 </div>
 </div>
 
@@ -178,8 +200,8 @@ async function initAuth(){
   const box = $('auth');
   const u = JSON.parse(localStorage.getItem('user') || 'null');
   if (u && JWT()){
-    box.innerHTML = `<span>👤 ${u.email || u.name || 'user'}</span>
-      <button class="del" id="signout">sign out</button>`;
+    box.innerHTML = `<span class="userchip">👤 ${u.email || u.name || 'user'}</span>
+      <button class="btn-ghost" id="signout">sign out</button>`;
     $('signout').onclick = () => { localStorage.removeItem('jwt');
       localStorage.removeItem('user'); location.reload(); };
     return;
@@ -232,9 +254,10 @@ async function refreshKnown(){
                                         {method: 'DELETE'});
                               refreshKnown(); if (book) loadStats(); });
 }
-$('knownUp').onclick = async () => {
+$('knownUp').onclick = () => $('knownFile').click();
+$('knownFile').onchange = async () => {
   const files = $('knownFile').files;
-  if (!files.length) return $('knownMsg').textContent = 'choose a file first';
+  if (!files.length) return;
   $('knownMsg').textContent = 'uploading & analyzing… (a big PDF can take '
     + 'a few minutes on the small server)';
   for (const f of files){
@@ -242,32 +265,61 @@ $('knownUp').onclick = async () => {
                         {method: 'POST', body: f});
     $('knownMsg').textContent = d.error || '';
   }
+  $('knownFile').value = '';
   refreshKnown(); if (book) loadStats();
 };
 
 // ---- step 2: books + stats ----
+const bestLevel = dp => [75, 50, 25, 0].reduce((best, l) =>
+  (dp[l] || 0) > (dp[best] || 0) ? l : best, 0);
+
 async function refreshBooks(sel){
   const d = await api('/books');
-  $('bookSel').innerHTML = '<option value="">— choose a book —</option>' +
-    d.books.map(b => `<option value="${b.slug}">${b.title} (${b.pages} p.)</option>`).join('');
-  if (sel){ $('bookSel').value = sel; $('bookSel').onchange(); }
+  const books = d.books || [];
+  $('bookCards').innerHTML = books.map(b => {
+    const total = Object.values(b.done_pages).reduce((a, n) => a + n, 0);
+    return `<button class="bcard ${b.slug === book ? 'on' : ''}"
+      data-s="${b.slug}"><b>${b.title}</b>
+      <span>${b.pages} pages · ${total ? total + ' p. translated'
+        : 'not translated yet'}</span></button>`;
+  }).join('') || '<span class="jobline">no books yet — upload one above</span>';
+  document.querySelectorAll('#bookCards .bcard').forEach(c =>
+    c.onclick = () => selectBook(c.dataset.s));
+
+  // continue reading: 3 most recently translated books, one tap to read
+  const readable = books.filter(b =>
+    Object.values(b.done_pages).some(n => n))
+    .sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 3);
+  $('contBox').style.display = readable.length ? '' : 'none';
+  $('contList').innerHTML = readable.map(b => {
+    const lv = bestLevel(b.done_pages);
+    return `<button class="bcard" onclick="location.href=
+      'reader_site.html?book=${b.slug}&level=${lv}'">
+      <b>${b.title}</b><span>level ${lv} · ${b.done_pages[lv]} pages ready</span>
+      <span class="go">continue reading →</span></button>`;
+  }).join('');
+  if (sel) selectBook(sel);
 }
-$('bookUp').onclick = async () => {
+$('bookUp').onclick = () => $('bookFile').click();
+$('bookFile').onchange = async () => {
   const f = $('bookFile').files[0];
-  if (!f) return $('bookMsg').textContent = 'choose a file first';
+  if (!f) return;
   $('bookMsg').textContent = 'uploading & analyzing… (a big PDF can take '
     + 'a few minutes on the small server)';
   const d = await api('/books?name=' + encodeURIComponent(f.name),
                       {method: 'POST', body: f});
   $('bookMsg').textContent = d.error || '';
+  $('bookFile').value = '';
   if (!d.error) refreshBooks(d.slug);
 };
-$('bookSel').onchange = () => {
-  book = $('bookSel').value || null;
+function selectBook(slug){
+  book = slug || null;
+  document.querySelectorAll('#bookCards .bcard').forEach(c =>
+    c.classList.toggle('on', c.dataset.s === book));
   ['s3','s4','s5','s6'].forEach(id => $(id).classList.toggle('dis', !book));
   $('stats').style.display = 'none';
   if (book) loadStats();
-};
+}
 async function loadStats(){
   const d = await api(`/books/${book}/stats`);
   if (d.error) return $('bookMsg').textContent = d.error;
@@ -376,18 +428,36 @@ function renderPdfModes(){
         m.classList.toggle('on', m.dataset.m === pdfMode)); });
 }
 $('goPdf').onclick = async () => {
-  $('pdfMsg').textContent = 'building…'; $('goPdf').disabled = true;
+  $('pdfErr').textContent = ''; $('goPdf').disabled = true;
+  // estimate from the number of translated pages at this level
+  const bl = await api('/books');
+  const bb = (bl.books || []).find(x => x.slug === book);
+  const n = bb ? (bb.done_pages[level] || 0) : 0;
+  const est = Math.max(4, Math.round(4 + n * 0.35));
+  const t0 = Date.now();
+  $('pdfBarWrap').style.display = '';
+  const tick = setInterval(() => {
+    const s = (Date.now() - t0) / 1000;
+    $('pdfBar').style.width = Math.min(97, s / est * 100) + '%';
+    $('pdfMsg').textContent =
+      `building ${n} pages… ~${est}s expected · ${Math.round(s)}s elapsed`;
+  }, 250);
   try {
     const r = await fetch(`/books/${book}/pdf?level=${level}&mode=${pdfMode}`,
                           {headers: authHeaders()});
-    if (!r.ok){ const d = await r.json(); throw new Error(d.error || r.status); }
+    if (!r.ok){ const d = await r.json(); throw new Error(d.detail || d.error || r.status); }
     const blob = await r.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${book}_L${level}_${pdfMode}.pdf`;
     a.click(); URL.revokeObjectURL(a.href);
-    $('pdfMsg').textContent = '';
-  } catch (e){ $('pdfMsg').textContent = e.message; }
+    $('pdfBar').style.width = '100%';
+    $('pdfMsg').textContent =
+      `done in ${Math.round((Date.now() - t0) / 1000)}s ✓`;
+  } catch (e){ $('pdfErr').textContent = e.message; $('pdfMsg').textContent = ''; }
+  clearInterval(tick);
+  setTimeout(() => { $('pdfBarWrap').style.display = 'none';
+                     $('pdfBar').style.width = '0'; }, 2500);
   $('goPdf').disabled = false;
 };
 
