@@ -82,9 +82,13 @@ Tunnel (no card), Hetzner €4 (PayPal).
       (levels 0/25/75), stats == local (59.0%, 10692 types), clean PDF
       built on VM with DejaVu (3 pages), reader hover 23/23 tooltips.
       USER: confirm from your phone's browser.
-- [ ] 2a.6 Backup: nightly cron — tar data/ + SQLite -> Oracle Object
-      Storage (free 20 GB) or rsync home; keep 7 days.
-      **Check:** delete a test book, restore from yesterday's backup.
+- [x] 2a.6 2026-07-16: pull-backup to the dev PC (user's choice):
+      deploy/backup_pull.ps1 tars the VM's data/ -> D:\Backups\reader_vm,
+      keeps newest 14; Windows task "ReaderVmBackup" daily 20:00
+      (StartWhenAvailable if the PC was off). PHASE 2a COMPLETE.
+      **Check:** PASSED — marker file backed up, deleted on VM, restored
+      from the D: archive with intact content. Caveat: backups only run
+      when the PC is on; revisit (VM-side snapshot to GCS) in 2b.4.
 
 ## Phase 2b — users + quotas + Telegram
 
