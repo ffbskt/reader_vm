@@ -48,6 +48,7 @@ def _loop():
 
 def _run(job):
     jid, slug, level = job["id"], job["book_slug"], job["level"]
+    pipeline.set_user(job["user_id"])       # scope library paths to the owner
     done = cached = api_calls = 0
     api_time = 0.0
     errors = []

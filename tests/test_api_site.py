@@ -19,8 +19,7 @@ BOOK_TXT = ("<<<PAGE 1>>>\nEl perro grande come en la casa vieja. "
 @pytest.fixture(autouse=True)
 def temp_site(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "SITE", str(tmp_path))
-    monkeypatch.setattr(pipeline, "KNOWN_DIR", str(tmp_path / "known"))
-    monkeypatch.setattr(pipeline, "BOOKS_DIR", str(tmp_path / "books"))
+    pipeline.set_user(1)
 
 def test_known_upload_list_delete():
     r = client.post("/known?name=mywords.txt", content=KNOWN_TXT)

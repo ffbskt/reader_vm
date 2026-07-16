@@ -77,14 +77,14 @@ def login_google(id_tok: str) -> dict:
     return {"token": mint_jwt(user["id"]), "user": public_user(user)}
 
 TELEGRAM_BOT_SECRET = os.environ.get("TELEGRAM_BOT_SECRET", "")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_BOT_USERNAME = os.environ.get("TELEGRAM_BOT_USERNAME",
+                                       "ffbskt_reader_bot")
 OWNER_TG_ID = int(os.environ.get("OWNER_TG_ID", "0") or 0)
 
-def login_telegram(tg_id: int, name: str, bot_secret: str) -> dict:
-    """The bot (and only the bot — shared secret) exchanges a chat's
-    tg_id for a session JWT. Owner tg_id claims user 1."""
+def _login_tg_user(tg_id: int, name: str) -> dict:
+    """Map a verified Telegram id to a user (owner id claims user 1) -> JWT."""
     from api import db
-    if not TELEGRAM_BOT_SECRET or bot_secret != TELEGRAM_BOT_SECRET:
-        raise ValueError("bad bot secret")
     user = db.user_by_tg_id(tg_id)
     if user is None:
         owner = db.get_user(1)
@@ -95,21 +95,59 @@ def login_telegram(tg_id: int, name: str, bot_secret: str) -> dict:
             user = db.create_tg_user(tg_id, name)
     return {"token": mint_jwt(user["id"]), "user": public_user(user)}
 
+def login_telegram(tg_id: int, name: str, bot_secret: str) -> dict:
+    """The bot (shared secret) exchanges a chat's tg_id for a session JWT."""
+    if not TELEGRAM_BOT_SECRET or bot_secret != TELEGRAM_BOT_SECRET:
+        raise ValueError("bad bot secret")
+    return _login_tg_user(tg_id, name)
+
+def verify_telegram_widget(data: dict) -> dict:
+    """Verify the Telegram Login Widget payload: HMAC-SHA256 of the sorted
+    fields, keyed by SHA256(bot_token), must equal the given hash."""
+    if not TELEGRAM_TOKEN:
+        raise ValueError("Telegram login not configured on the server")
+    data = dict(data)
+    check_hash = str(data.pop("hash", ""))
+    check_string = "\n".join(f"{k}={data[k]}" for k in sorted(data)
+                             if data[k] is not None)
+    secret = hashlib.sha256(TELEGRAM_TOKEN.encode()).digest()
+    calc = hmac.new(secret, check_string.encode(),
+                    hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calc, check_hash):
+        raise ValueError("bad Telegram signature")
+    if time.time() - int(data.get("auth_date", 0)) > 86400:
+        raise ValueError("Telegram login expired, try again")
+    return data
+
+def login_telegram_widget(data: dict) -> dict:
+    """Web 'Log in with Telegram' -> session JWT (hash-verified)."""
+    info = verify_telegram_widget(data)
+    name = info.get("username") or info.get("first_name", "")
+    return _login_tg_user(int(info["id"]), name)
+
 def public_user(user: dict) -> dict:
     return {"id": user["id"], "email": user.get("email"),
             "name": user.get("name"), "tier": user.get("tier", "free")}
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    # async on purpose: it runs in the request's event-loop task, so the
+    # user scope it sets is copied into the sync endpoint's worker thread
+    # (a sync dependency would set it in a different, throwaway thread).
     from api import db
+    from core import pipeline
     if authorization is None:
         if REQUIRE_AUTH:
             raise HTTPException(401, "login required")
-        return db.get_user(1)              # transition mode: legacy user
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(401, "expected 'Authorization: Bearer <token>'")
-    uid = verify_jwt(parts[1])
-    user = db.get_user(uid) if uid is not None else None
-    if user is None:
-        raise HTTPException(401, "invalid or expired token")
+        user = db.get_user(1)              # transition mode: legacy user
+    else:
+        parts = authorization.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            raise HTTPException(401, "expected 'Authorization: Bearer <token>'")
+        uid = verify_jwt(parts[1])
+        user = db.get_user(uid) if uid is not None else None
+        if user is None:
+            raise HTTPException(401, "invalid or expired token")
+    # scope every library path in this request to this user (same thread as
+    # the endpoint that follows, so the contextvar is visible downstream)
+    pipeline.set_user(user["id"])
     return user

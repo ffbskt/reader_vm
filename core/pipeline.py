@@ -33,12 +33,53 @@ from analyze import (fold, counted_words, tokenize, clean_ocr, proper_nouns,
                      read_api_key, load_pages)
 from simplify_page import MODELS, QuotaError
 
+import contextvars
+
 SITE = os.path.join(ROOT, "data", "site")
-KNOWN_DIR = os.path.join(SITE, "known")
-BOOKS_DIR = os.path.join(SITE, "books")
 LEVELS = (0, 25, 50, 75)
 PAGE_WORDS = 220          # pseudo-page size for plain text without markers
 API_GAP_S = 5             # pause between Gemini calls (free-tier RPM)
+STORAGE_LIMIT = 100 * 1024 * 1024     # per-user library cap (bytes)
+
+# Each user's library lives under SITE/users/<uid>/. The API sets this per
+# request, the worker per job; default 1 = the owner / single-user mode.
+_current_user = contextvars.ContextVar("user_id", default=1)
+
+def set_user(uid):
+    _current_user.set(int(uid))
+
+def user_root(uid=None):
+    return os.path.join(SITE, "users", str(uid if uid is not None
+                                           else _current_user.get()))
+
+def known_dir():
+    return os.path.join(user_root(), "known")
+
+def books_dir():
+    return os.path.join(user_root(), "books")
+
+def storage_used(uid=None):
+    """Total bytes in a user's library (known sources + books + caches)."""
+    root = user_root(uid)
+    total = 0
+    for dp, _, files in os.walk(root):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(dp, f))
+            except OSError:
+                pass
+    return total
+
+def migrate_legacy_to_user1():
+    """Pre-multi-user data lived flat in SITE/known and SITE/books. Move it
+    once into the owner's per-user library (SITE/users/1/). Idempotent."""
+    dest = user_root(1)
+    for name in ("known", "books"):
+        old = os.path.join(SITE, name)
+        new = os.path.join(dest, name)
+        if os.path.isdir(old) and not os.path.exists(new):
+            os.makedirs(dest, exist_ok=True)
+            os.rename(old, new)
 
 def _slug(name):
     base = os.path.splitext(os.path.basename(name))[0].lower()
@@ -81,7 +122,7 @@ def _looks_like_word_list(text):
 # known-vocabulary sources
 # --------------------------------------------------------------------------
 def add_known_source(filename, blob):
-    os.makedirs(KNOWN_DIR, exist_ok=True)
+    os.makedirs(known_dir(), exist_ok=True)
     slug = _slug(filename)
     if filename.lower().endswith(".pdf"):
         text = _read_upload_text(filename, blob)
@@ -98,23 +139,23 @@ def add_known_source(filename, blob):
         words = sorted({fold(w) for w, c in counts.items() if c >= 2})
     src = {"name": os.path.basename(filename), "slug": slug, "kind": kind,
            "count": len(words), "words": words}
-    with open(os.path.join(KNOWN_DIR, slug + ".json"), "w",
+    with open(os.path.join(known_dir(), slug + ".json"), "w",
               encoding="utf-8") as f:
         json.dump(src, f, ensure_ascii=False)
     return {k: src[k] for k in ("name", "slug", "kind", "count")}
 
 def list_known():
     out = []
-    if os.path.isdir(KNOWN_DIR):
-        for fn in sorted(os.listdir(KNOWN_DIR)):
+    if os.path.isdir(known_dir()):
+        for fn in sorted(os.listdir(known_dir())):
             if fn.endswith(".json"):
-                s = json.load(open(os.path.join(KNOWN_DIR, fn),
+                s = json.load(open(os.path.join(known_dir(), fn),
                                    encoding="utf-8"))
                 out.append({k: s[k] for k in ("name", "slug", "kind", "count")})
     return out
 
 def delete_known(slug):
-    fp = os.path.join(KNOWN_DIR, _slug(slug) + ".json")
+    fp = os.path.join(known_dir(), _slug(slug) + ".json")
     if os.path.exists(fp):
         os.remove(fp)
         return True
@@ -122,10 +163,10 @@ def delete_known(slug):
 
 def known_set():
     words = set()
-    if os.path.isdir(KNOWN_DIR):
-        for fn in os.listdir(KNOWN_DIR):
+    if os.path.isdir(known_dir()):
+        for fn in os.listdir(known_dir()):
             if fn.endswith(".json"):
-                s = json.load(open(os.path.join(KNOWN_DIR, fn),
+                s = json.load(open(os.path.join(known_dir(), fn),
                                    encoding="utf-8"))
                 words.update(s["words"])
     return words
@@ -135,7 +176,7 @@ def known_set():
 # --------------------------------------------------------------------------
 def add_book(filename, blob):
     slug = _slug(filename)
-    bdir = os.path.join(BOOKS_DIR, slug)
+    bdir = os.path.join(books_dir(), slug)
     os.makedirs(os.path.join(bdir, "simplified"), exist_ok=True)
     text = _read_upload_text(filename, blob)
     with open(os.path.join(bdir, "book.txt"), "w", encoding="utf-8") as f:
@@ -149,14 +190,14 @@ def add_book(filename, blob):
 
 def list_books():
     out = []
-    if os.path.isdir(BOOKS_DIR):
-        for slug in sorted(os.listdir(BOOKS_DIR)):
-            mp = os.path.join(BOOKS_DIR, slug, "meta.json")
+    if os.path.isdir(books_dir()):
+        for slug in sorted(os.listdir(books_dir())):
+            mp = os.path.join(books_dir(), slug, "meta.json")
             if os.path.exists(mp):
                 m = json.load(open(mp, encoding="utf-8"))
                 m["done_pages"] = {
                     lv: len(cached_pages(slug, lv)) for lv in LEVELS}
-                sd = os.path.join(BOOKS_DIR, slug, "simplified")
+                sd = os.path.join(books_dir(), slug, "simplified")
                 times = [os.path.getmtime(os.path.join(sd, f))
                          for f in os.listdir(sd)] if os.path.isdir(sd) else []
                 m["updated"] = max(times) if times else os.path.getmtime(mp)
@@ -164,7 +205,7 @@ def list_books():
     return out
 
 def book_dir(slug):
-    return os.path.join(BOOKS_DIR, _slug(slug))
+    return os.path.join(books_dir(), _slug(slug))
 
 def book_pages(slug):
     return load_pages(os.path.join(book_dir(slug), "book.txt"))

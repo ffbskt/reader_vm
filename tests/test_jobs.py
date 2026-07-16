@@ -20,8 +20,7 @@ CACHED_PAGE = {"page": 1, "method": "rewrite", "level": 0, "fmt": 2,
 @pytest.fixture(autouse=True)
 def temp_site(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "SITE", str(tmp_path))
-    monkeypatch.setattr(pipeline, "KNOWN_DIR", str(tmp_path / "known"))
-    monkeypatch.setattr(pipeline, "BOOKS_DIR", str(tmp_path / "books"))
+    pipeline.set_user(1)
     from api import worker
     worker.ensure_worker()          # TestClient may not fire startup events
 

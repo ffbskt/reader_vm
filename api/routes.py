@@ -30,6 +30,11 @@ async def read_upload(request: Request) -> bytes:
     length = int(request.headers.get("content-length", 0))
     if not 0 < length <= MAX_UPLOAD:
         raise HTTPException(400, "bad upload size")
+    used = pipeline.storage_used()
+    if used + length > pipeline.STORAGE_LIMIT:
+        mb = pipeline.STORAGE_LIMIT // (1024 * 1024)
+        raise HTTPException(413, f"storage limit reached ({mb} MB per user). "
+                                 f"Delete a book or word list to free space.")
     return await request.body()
 
 def known_overview():

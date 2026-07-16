@@ -57,6 +57,20 @@ def test_telegram_login_owner_and_secret(monkeypatch):
         "tg_id": 999, "name": "f", "bot_secret": "s3cr3t"}).json()
     assert other["user"]["id"] != 1
 
+def test_telegram_widget_hash(monkeypatch):
+    import hashlib, hmac, time as _t
+    monkeypatch.setattr(auth, "TELEGRAM_TOKEN", "123:TESTTOKEN")
+    data = {"id": "555", "first_name": "Tg", "username": "tguser",
+            "auth_date": str(int(_t.time()))}
+    check = "\n".join(f"{k}={data[k]}" for k in sorted(data))
+    secret = hashlib.sha256(b"123:TESTTOKEN").digest()
+    data["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    r = client.post("/auth/telegram-widget", json=data).json()
+    assert r["user"]["id"]                        # logged in
+    bad = client.post("/auth/telegram-widget",
+                      json={**data, "hash": "deadbeef"})
+    assert bad.status_code == 401
+
 def test_bad_google_token_is_401(monkeypatch):
     def boom(tok):
         raise ValueError("bad token")

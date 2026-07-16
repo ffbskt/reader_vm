@@ -30,6 +30,8 @@ app = FastAPI(
 
 @app.on_event("startup")
 def start_worker():
+    from core import pipeline
+    pipeline.migrate_legacy_to_user1()      # one-time: flat data -> users/1/
     from api.worker import ensure_worker
     ensure_worker()
 
@@ -40,15 +42,30 @@ def health():
 
 @app.get("/me", tags=["auth"])
 def me(user: dict = Depends(get_current_user)):
-    """The authenticated user's profile and tier (quota usage joins in 2b)."""
+    """The authenticated user's profile, tier, and storage usage."""
     from api.auth import public_user
-    return {"user": public_user(user)}
+    from core import pipeline
+    used = pipeline.storage_used()
+    return {"user": public_user(user),
+            "storage": {"used": used, "limit": pipeline.STORAGE_LIMIT,
+                        "pct": round(used / pipeline.STORAGE_LIMIT * 100, 1)}}
 
 @app.get("/auth/config", tags=["auth"])
 def auth_config():
-    """What the SPA needs to render the Google button (client id is public)."""
-    from api.auth import GOOGLE_CLIENT_ID
-    return {"google_client_id": GOOGLE_CLIENT_ID}
+    """What the SPA needs to render the login buttons (both public)."""
+    from api.auth import GOOGLE_CLIENT_ID, TELEGRAM_BOT_USERNAME
+    return {"google_client_id": GOOGLE_CLIENT_ID,
+            "telegram_bot": TELEGRAM_BOT_USERNAME}
+
+@app.post("/auth/telegram-widget", tags=["auth"])
+def auth_telegram_widget(body: dict):
+    """Web 'Log in with Telegram' — verify the widget hash, issue a JWT."""
+    from api.auth import login_telegram_widget
+    try:
+        return login_telegram_widget(body)
+    except (ValueError, KeyError) as e:
+        from fastapi import HTTPException
+        raise HTTPException(401, f"Telegram login rejected: {e}")
 
 @app.post("/auth/telegram", tags=["auth"])
 def auth_telegram(body: dict):

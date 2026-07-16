@@ -202,7 +202,14 @@ const api = (path, opts = {}) => fetch(path,
     return d;
   });
 
-// ---- Google sign-in (2b.1) ----
+// ---- sign-in: Google + Telegram (2b.1) ----
+function saveLogin(d){
+  if (d.token){
+    localStorage.setItem('jwt', d.token);
+    localStorage.setItem('user', JSON.stringify(d.user));
+    location.reload();
+  } else alert(d.error || 'login failed');
+}
 async function initAuth(){
   const box = $('auth');
   const u = JSON.parse(localStorage.getItem('user') || 'null');
@@ -214,24 +221,34 @@ async function initAuth(){
     return;
   }
   const cfg = await api('/auth/config');
-  if (!cfg.google_client_id) return;         // login not configured yet
-  const s = document.createElement('script');
-  s.src = 'https://accounts.google.com/gsi/client';
-  s.onload = () => {
-    google.accounts.id.initialize({client_id: cfg.google_client_id,
-      callback: async resp => {
-        const d = await api('/auth/google', {method: 'POST',
+  // Google button
+  if (cfg.google_client_id){
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = () => {
+      google.accounts.id.initialize({client_id: cfg.google_client_id,
+        callback: resp => api('/auth/google', {method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({id_token: resp.credential})});
-        if (d.token){
-          localStorage.setItem('jwt', d.token);
-          localStorage.setItem('user', JSON.stringify(d.user));
-          location.reload();
-        } else alert(d.error || 'login failed');
-      }});
-    google.accounts.id.renderButton(box, {theme: 'outline', size: 'medium'});
-  };
-  document.head.appendChild(s);
+          body: JSON.stringify({id_token: resp.credential})}).then(saveLogin)});
+      google.accounts.id.renderButton(box, {theme: 'outline', size: 'medium'});
+    };
+    document.head.appendChild(s);
+  }
+  // Telegram "Log in" widget
+  if (cfg.telegram_bot){
+    window.onTelegramAuth = user =>
+      api('/auth/telegram-widget', {method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(user)}).then(saveLogin);
+    const t = document.createElement('script');
+    t.async = true;
+    t.src = 'https://telegram.org/js/telegram-widget.js?22';
+    t.setAttribute('data-telegram-login', cfg.telegram_bot);
+    t.setAttribute('data-size', 'medium');
+    t.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    t.setAttribute('data-request-access', 'write');
+    box.appendChild(t);
+  }
 }
 initAuth();
 
