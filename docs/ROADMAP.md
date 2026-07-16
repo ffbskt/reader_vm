@@ -69,11 +69,19 @@ Tunnel (no card), Hetzner €4 (PayPal).
       2 GB swap, Docker + Compose v5.3.1.
       **Check:** PASSED — hello-world runs; only port 22 listening
       (80/443 open in GCP firewall, used once Caddy deploys).
-- [ ] 2a.4 Dockerfile + docker-compose.yml (api, worker, caddy) run LOCALLY.
-      **Check:** the Phase 1 checks all pass against `localhost` compose.
-- [ ] 2a.5 First deploy: clone repo on VM, `.env` (chmod 600) with PROD
-      Gemini key, `docker compose up -d`. Domain optional; start with IP.
-      **Check:** wizard works from your phone's browser on the VM address.
+- [x] 2a.4 2026-07-16: Dockerfile (python:3.11-slim + DejaVu fonts;
+      build_pdf now falls back Arial->DejaVu per platform), .dockerignore
+      (secrets/data excluded), compose (api + caddy :80), deploy/Caddyfile.
+      No local Docker on the dev PC -> built and checked ON the VM (worker
+      = thread inside api container in Phase 1; separate container comes
+      with Redis in Phase 4).
+- [x] 2a.5 2026-07-16: DEPLOYED — repo cloned to ~/app on reader-vm, .env
+      via scp (chmod 600, never printed), data/site + word_dict rsynced
+      (1.1 MB), compose up. http://35.254.216.89/app.html live.
+      **Check:** PASSED via public IP — /health ok, library intact
+      (levels 0/25/75), stats == local (59.0%, 10692 types), clean PDF
+      built on VM with DejaVu (3 pages), reader hover 23/23 tooltips.
+      USER: confirm from your phone's browser.
 - [ ] 2a.6 Backup: nightly cron — tar data/ + SQLite -> Oracle Object
       Storage (free 20 GB) or rsync home; keep 7 days.
       **Check:** delete a test book, restore from yesterday's backup.
