@@ -38,10 +38,13 @@ Tunnel (no card), Hetzner €4 (PayPal).
       **Check:** PASSED — stats via new API == old server on every field;
       live curl upload known+book -> correct stats; throwaway data removed;
       24/24 tests green.
-- [ ] 1.5 Jobs in SQLite (`jobs`, `job_events` tables) + worker thread;
-      port translate + gap-fill into it.
-      **Check:** 1-page job on cached page runs free; events appear;
-      progress endpoint counts to 100.
+- [x] 1.5 2026-07-16: api/db.py (jobs + job_events in data/site/app.db) +
+      api/worker.py (daemon FIFO consumer, QuotaError -> 'quota', gap-fill
+      at end). POST /books/{slug}/translate (202, 409 on duplicate),
+      GET /jobs/{id}, GET /jobs?book=. Windows-anaconda sqlite DLL fix in
+      db.py. job.json path still serves the legacy wizard until 1.6.
+      **Check:** PASSED — live 5-page cached job: $0, pct 100, five
+      page_done + job_done events; 27/27 tests green.
 - [ ] 1.6 Port reader + PDF endpoints; app.html + reader_site.html call the
       new API (static SPA).
       **Check:** full wizard in browser: stats -> level -> job -> reader

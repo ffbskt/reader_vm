@@ -27,6 +27,11 @@ app = FastAPI(
                 "-> simplified text at levels 0/25/50/75, online reader "
                 "with hover translations, PDF in 4 vocabulary modes.")
 
+@app.on_event("startup")
+def start_worker():
+    from api.worker import ensure_worker
+    ensure_worker()
+
 @app.get("/health", tags=["system"])
 def health():
     """Liveness probe for monitors and load balancers."""
