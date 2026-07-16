@@ -100,13 +100,15 @@ Tunnel (no card), Hetzner €4 (PayPal).
       library; GET /auth/config; Sign-in-with-Google button + Bearer
       headers in app.html/reader_site.html; anonymous still = user 1
       until REQUIRE_AUTH=1 (flips in 2b.2). 32/32 tests.
-      PENDING: USER creates the OAuth Client ID (console steps in chat),
-      then GOOGLE_CLIENT_ID -> VM .env + live login test. Telegram Login
-      lands with the bot (2b.3); per-user data dirs land with quotas
-      (2b.2).
-      **Check (so far):** garbage Bearer -> 401 live; owner-claim,
-      new-user and expiry paths covered by tests. Full check once the
-      client id exists: two browsers, two accounts, libraries don't mix.
+      Config done 2026-07-16: Google refuses bare-IP origins -> domain
+      https://readersimple.duckdns.org (DuckDNS, user's account) + auto
+      HTTPS via Caddy; client id + JWT_SECRET in VM .env (env changes need
+      compose up --force-recreate, not restart). Button renders live.
+      Telegram Login lands with the bot (2b.3); per-user data dirs with
+      quotas (2b.2).
+      **Check:** PENDING USER — sign in with ffbskt@gmail.com at
+      /app.html; header shows email; owner rule keeps the library.
+      Later full check: two browsers, two accounts, libraries don't mix.
 - [ ] 2b.2 quota.py gate (Free limits from ARCHITECTURE §5) + usage
       counters + `quota` job status handling in the UI.
       **Check:** set limit=2 pages in test config, run 3-page job -> pauses
