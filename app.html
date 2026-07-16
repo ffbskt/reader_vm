@@ -1,0 +1,337 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text simplifier — full pipeline</title>
+<style>
+:root{
+  --bg:#F6F5F0; --panel:#FFFFFF; --panel2:#EFEDE6; --ink:#23282E; --muted:#6E6F66;
+  --line:#DDDBD0; --accent:#2D5FA8; --accent-ink:#FFFFFF; --unk:#A85B25;
+  --unk-bg:#F5E8DC; --ok:#3A7A3A;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#15181D; --panel:#1D2127; --panel2:#242931; --ink:#E6E4DC; --muted:#9A9B90;
+  --line:#333941; --accent:#6E9BD8; --accent-ink:#10131A; --unk:#D89A5E;
+  --unk-bg:#33271B; --ok:#7FBF7F;
+}}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);margin:0;
+  font:15px/1.5 system-ui,'Segoe UI',sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:24px 20px 80px}
+h1{font-family:'Iowan Old Style',Palatino,Georgia,serif;font-size:1.8rem;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 26px;max-width:75ch}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:18px 22px;margin:0 0 18px}
+.step h2{font-size:1.05rem;margin:0 0 4px}
+.step h2 .no{display:inline-block;width:26px;height:26px;border-radius:50%;
+  background:var(--accent);color:var(--accent-ink);text-align:center;
+  line-height:26px;font-size:.85rem;margin-right:10px}
+.step .hint{color:var(--muted);font-size:.85rem;margin:0 0 12px}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);
+  font:inherit;font-weight:600;border-radius:6px;padding:9px 20px;cursor:pointer}
+.btn.sec{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+input[type=file]{font:inherit;color:var(--muted)}
+input[type=number]{font:inherit;width:90px;padding:6px 8px;border:1px solid var(--line);
+  border-radius:6px;background:var(--panel);color:var(--ink)}
+select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+  background:var(--panel);color:var(--ink);max-width:100%}
+.srcs{list-style:none;margin:10px 0 0;padding:0}
+.srcs li{display:flex;gap:10px;align-items:center;padding:6px 0;
+  border-bottom:1px dashed var(--line);font-size:.9rem}
+.srcs .k{background:var(--panel2);border-radius:10px;font-size:.72rem;
+  padding:1px 9px;color:var(--muted)}
+.srcs .del{margin-left:auto;background:none;border:none;color:var(--unk);
+  cursor:pointer;font-size:.85rem}
+.tiles{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.tile{background:var(--panel2);border-radius:6px;padding:9px 14px;min-width:130px;flex:1}
+.tile b{display:block;font-size:1.3rem;font-variant-numeric:tabular-nums}
+.tile span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chip{background:var(--unk-bg);color:var(--unk);border-radius:12px;
+  padding:2px 11px;font-size:.85rem}
+.chip small{opacity:.7}
+.plot{margin:14px 0;overflow-x:auto}
+.plot svg{display:block}
+.plotcap{font-size:.75rem;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.05em;margin:2px 0 6px}
+.modes{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}
+@media (max-width:700px){.modes{grid-template-columns:1fr}}
+.mode{background:var(--panel);border:2px solid var(--line);border-radius:8px;
+  padding:12px 14px;cursor:pointer;display:block}
+.mode.on{border-color:var(--accent)}
+.mode b{display:block;margin-bottom:3px}
+.mode span{font-size:.82rem;color:var(--muted);line-height:1.4}
+.mode .n{display:inline-block;margin-top:6px;font-size:.78rem;font-weight:600;
+  background:var(--panel2);border-radius:10px;padding:1px 9px}
+.bar{background:var(--panel2);border-radius:5px;height:16px;overflow:hidden;margin:10px 0}
+.bar i{display:block;height:100%;background:var(--accent);width:0;
+  transition:width .4s;border-radius:5px}
+.jobline{font-size:.9rem;color:var(--muted)}
+.err{color:var(--unk);font-size:.85rem;white-space:pre-wrap}
+.okmsg{color:var(--ok);font-size:.9rem}
+.dis{opacity:.5;pointer-events:none}
+a.readlink{color:var(--accent);font-weight:600}
+</style>
+
+<div class="wrap">
+<h1>Text simplifier</h1>
+<p class="sub">Full pipeline: teach the app which words you already know,
+upload a hard book, choose how much difficulty to keep, translate it with
+Gemini, then read online with hover translations or download a PDF.</p>
+
+<!-- 1 ─ known vocabulary -->
+<div class="step" id="s1">
+  <h2><span class="no">1</span>Your known vocabulary</h2>
+  <p class="hint">Upload books you have already read (PDF/TXT — words used
+  2+ times count as known) or a plain word list (one word per line).</p>
+  <input type="file" id="knownFile" multiple accept=".pdf,.txt,.csv,.md">
+  <button class="btn sec" id="knownUp">Upload</button>
+  <span id="knownMsg" class="err"></span>
+  <ul class="srcs" id="knownList"></ul>
+  <div class="tiles"><div class="tile"><b id="knownTotal">0</b>
+    <span>known words total</span></div></div>
+</div>
+
+<!-- 2 ─ target book + stats -->
+<div class="step" id="s2">
+  <h2><span class="no">2</span>The hard book you want to read</h2>
+  <p class="hint">Upload the target book (PDF/TXT), then check the coverage:
+  a random 30 of its unknown words and per-page difficulty.</p>
+  <input type="file" id="bookFile" accept=".pdf,.txt">
+  <button class="btn sec" id="bookUp">Upload</button>
+  <select id="bookSel"></select>
+  <span id="bookMsg" class="err"></span>
+  <div id="stats" style="display:none">
+    <div class="tiles">
+      <div class="tile"><b id="stCov"></b><span>token coverage</span></div>
+      <div class="tile"><b id="stUnkT"></b><span>unknown word types</span></div>
+      <div class="tile"><b id="stPages"></b><span>pages</span></div>
+    </div>
+    <div class="plotcap">Random 30 unknown words <small>(count in book)</small></div>
+    <div class="chips" id="stChips"></div>
+    <div class="plotcap">Unknown words per page, %</div>
+    <div class="plot" id="plotPages"></div>
+  </div>
+</div>
+
+<!-- 3 ─ level -->
+<div class="step dis" id="s3">
+  <h2><span class="no">3</span>Level of simplification</h2>
+  <p class="hint">The level = how much of the unknown TEXT stays. The most
+  frequent unknown words are kept until they cover that share of the unknown
+  word occurrences — so the four levels feel evenly spaced while reading.
+  Only these four options exist, so every translated page is cached and
+  never paid for twice.</p>
+  <div class="modes" id="levels"></div>
+</div>
+
+<!-- 4 ─ translate -->
+<div class="step dis" id="s4">
+  <h2><span class="no">4</span>Translate</h2>
+  <p class="hint">Pick a page range and start. Pages are sent to the Gemini
+  API one by one (free tier, cached pages are skipped for free).</p>
+  page from <input type="number" id="pFrom" min="1" value="1">
+  to <input type="number" id="pTo" min="1" value="1">
+  <button class="btn" id="goTr">Translate</button>
+  <div class="bar" id="jbarWrap" style="display:none"><i id="jbar"></i></div>
+  <div class="jobline" id="jline"></div>
+  <div class="err" id="jerr"></div>
+</div>
+
+<!-- 5 ─ read online -->
+<div class="step dis" id="s5">
+  <h2><span class="no">5</span>Read online</h2>
+  <p class="hint">Hover (or tap) any word for its English and Russian
+  translation.</p>
+  <a class="readlink" id="readLink" target="_blank">Open the reader →</a>
+  <span class="jobline" id="readInfo"></span>
+</div>
+
+<!-- 6 ─ PDF -->
+<div class="step dis" id="s6">
+  <h2><span class="no">6</span>Download PDF</h2>
+  <div class="modes" id="pdfModes"></div>
+  <button class="btn" id="goPdf">Build &amp; download PDF</button>
+  <span class="err" id="pdfMsg"></span>
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = (a, q = {}) =>
+  fetch('/api/site/' + a + '?' + new URLSearchParams(q)).then(r => r.json());
+
+let book = null, stats = null, level = 25;
+const LEVEL_INFO = [
+  [0,  'Only your words',  'Everything is rewritten with your known vocabulary only.'],
+  [25, 'Beginner',         'A quarter of the unknown text stays — only the top frequent words.'],
+  [50, 'Intermediate',     'Half of the unknown text stays.'],
+  [75, 'Advanced',         'Three quarters stay — only the rare tail is replaced.']];
+const PDF_MODES = [
+  ['spaced',  '1 · Spaced vocab',  'Repeats return with growing gaps (1, 2, 4, 8… pages).'],
+  ['repeat',  '2 · Full vocab',    'Every page lists all its unknown words.'],
+  ['norepeat','3 · No repeats',    'Each word appears once, on its first page.'],
+  ['clean',   '4 · Clean text',    'Continuous text only — for reading aloud.']];
+let pdfMode = 'spaced';
+
+// ---- step 1: known sources ----
+async function refreshKnown(){
+  const d = await api('known');
+  $('knownTotal').textContent = d.total_known;
+  $('knownList').innerHTML = d.sources.map(s =>
+    `<li><b>${s.name}</b><span class="k">${s.kind}</span>
+     <span class="k">${s.count} words</span>
+     <button class="del" data-s="${s.slug}">remove</button></li>`).join('');
+  document.querySelectorAll('#knownList .del').forEach(b =>
+    b.onclick = async () => { await api('known_delete', {slug: b.dataset.s});
+                              refreshKnown(); if (book) loadStats(); });
+}
+$('knownUp').onclick = async () => {
+  const files = $('knownFile').files;
+  if (!files.length) return $('knownMsg').textContent = 'choose a file first';
+  $('knownMsg').textContent = '';
+  for (const f of files){
+    const r = await fetch('/api/site/upload?kind=known&name=' +
+      encodeURIComponent(f.name), {method: 'POST', body: f});
+    const d = await r.json();
+    if (d.error) $('knownMsg').textContent = d.error;
+  }
+  refreshKnown(); if (book) loadStats();
+};
+
+// ---- step 2: books + stats ----
+async function refreshBooks(sel){
+  const d = await api('books');
+  $('bookSel').innerHTML = '<option value="">— choose a book —</option>' +
+    d.books.map(b => `<option value="${b.slug}">${b.title} (${b.pages} p.)</option>`).join('');
+  if (sel){ $('bookSel').value = sel; $('bookSel').onchange(); }
+}
+$('bookUp').onclick = async () => {
+  const f = $('bookFile').files[0];
+  if (!f) return $('bookMsg').textContent = 'choose a file first';
+  $('bookMsg').textContent = 'uploading…';
+  const r = await fetch('/api/site/upload?kind=book&name=' +
+    encodeURIComponent(f.name), {method: 'POST', body: f});
+  const d = await r.json();
+  $('bookMsg').textContent = d.error || '';
+  if (!d.error) refreshBooks(d.slug);
+};
+$('bookSel').onchange = () => {
+  book = $('bookSel').value || null;
+  ['s3','s4','s5','s6'].forEach(id => $(id).classList.toggle('dis', !book));
+  $('stats').style.display = 'none';
+  if (book) loadStats();
+};
+async function loadStats(){
+  const d = await api('stats', {book});
+  if (d.error) return $('bookMsg').textContent = d.error;
+  stats = d;
+  $('stats').style.display = '';
+  $('stCov').textContent = d.token_coverage + '%';
+  $('stUnkT').textContent = d.unknown_types;
+  $('stPages').textContent = d.pages;
+  $('stChips').innerHTML = d.sample.map(s =>
+    `<span class="chip">${s.w} <small>×${s.n}</small></span>`).join('');
+  drawPages(d.per_page);
+  renderLevels();
+  $('pTo').value = Math.min(d.pages, +$('pFrom').value + 9);
+  $('pTo').max = $('pFrom').max = d.pages;
+  refreshJob(); updateReadPdf();
+}
+function drawPages(pp){
+  const w = Math.max(pp.length * 9, 300), h = 120,
+        mx = Math.max(...pp.map(p => p.unk_pct), 1);
+  $('plotPages').innerHTML =
+    `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    pp.map((p, i) => {
+      const bh = p.unk_pct / mx * (h - 26);
+      return `<rect x="${i * 9}" y="${h - 14 - bh}" width="7" height="${bh}"
+        fill="var(--unk)" opacity=".8"><title>page ${p.page}: ${p.unk_pct}% unknown</title></rect>`;
+    }).join('') +
+    `<text x="0" y="${h - 2}" font-size="9" fill="var(--muted)">page ${pp[0].page}</text>
+     <text x="${w - 4}" y="${h - 2}" font-size="9" fill="var(--muted)" text-anchor="end">${pp[pp.length - 1].page}</text>
+     <text x="0" y="10" font-size="9" fill="var(--muted)">max ${mx}%</text></svg>`;
+}
+// ---- step 3: levels ----
+function renderLevels(){
+  $('levels').innerHTML = LEVEL_INFO.map(([lv, name, txt]) => {
+    const st = stats && stats.levels.find(l => l.level === lv);
+    return `<label class="mode ${lv === level ? 'on' : ''}" data-lv="${lv}">
+      <input type="radio" name="lv" value="${lv}" ${lv === level ? 'checked' : ''}>
+      <b>${lv} · ${name}</b><span>${txt}</span>
+      ${st ? `<i class="n">${st.kept_types} words stay · ≈${st.unk_pct_after}% unknown text</i>` : ''}</label>`;
+  }).join('');
+  document.querySelectorAll('#levels .mode input').forEach(i =>
+    i.onchange = () => { level = +i.value;
+      document.querySelectorAll('#levels .mode').forEach(m =>
+        m.classList.toggle('on', +m.dataset.lv === level));
+      refreshJob(); updateReadPdf(); });
+}
+// ---- step 4: translate job ----
+let poll = null;
+$('goTr').onclick = async () => {
+  $('jerr').textContent = '';
+  const d = await api('translate',
+    {book, from: $('pFrom').value, to: $('pTo').value, level});
+  if (d.error) return $('jerr').textContent = d.error;
+  trackJob();
+};
+function trackJob(){
+  $('jbarWrap').style.display = '';
+  clearInterval(poll);
+  poll = setInterval(refreshJob, 2000);
+  refreshJob();
+}
+async function refreshJob(){
+  if (!book) return;
+  const j = await api('job', {book});
+  if (j.status === 'idle' || !j.status){ $('jline').textContent = ''; return; }
+  $('jbarWrap').style.display = '';
+  $('jbar').style.width = (j.pct || 0) + '%';
+  const eta = j.eta_s == null ? '' :
+    ` · ~${Math.floor(j.eta_s / 60)}m ${j.eta_s % 60}s left`;
+  $('jline').textContent =
+    `${j.status} · level ${j.level} · page ${j.current ?? '—'} · ` +
+    `${j.done}/${j.total} (${j.pct || 0}%)${eta}` +
+    (j.cached ? ` · ${j.cached} from cache (free)` : '');
+  $('jerr').textContent = (j.errors || []).join('\n');
+  if (j.status !== 'running'){ clearInterval(poll); poll = null; updateReadPdf(); }
+}
+// ---- steps 5+6 ----
+async function updateReadPdf(){
+  if (!book) return;
+  const d = await api('books');
+  const b = d.books.find(x => x.slug === book);
+  const n = b ? (b.done_pages[level] || 0) : 0;
+  $('readLink').href = `reader_site.html?book=${book}&level=${level}`;
+  $('readInfo').textContent = n ? ` ${n} page(s) ready at level ${level}` :
+    ' no pages translated at this level yet';
+  $('s5').classList.toggle('dis', !n);
+  $('s6').classList.toggle('dis', !n);
+}
+function renderPdfModes(){
+  $('pdfModes').innerHTML = PDF_MODES.map(([m, name, txt]) =>
+    `<label class="mode ${m === pdfMode ? 'on' : ''}" data-m="${m}">
+     <input type="radio" name="pm" value="${m}" ${m === pdfMode ? 'checked' : ''}>
+     <b>${name}</b><span>${txt}</span></label>`).join('');
+  document.querySelectorAll('#pdfModes input').forEach(i =>
+    i.onchange = () => { pdfMode = i.value;
+      document.querySelectorAll('#pdfModes .mode').forEach(m =>
+        m.classList.toggle('on', m.dataset.m === pdfMode)); });
+}
+$('goPdf').onclick = async () => {
+  $('pdfMsg').textContent = 'building…'; $('goPdf').disabled = true;
+  try {
+    const r = await fetch(`/api/site/build_pdf?book=${book}&level=${level}&mode=${pdfMode}`);
+    if (!r.ok){ const d = await r.json(); throw new Error(d.error || r.status); }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${book}_L${level}_${pdfMode}.pdf`;
+    a.click(); URL.revokeObjectURL(a.href);
+    $('pdfMsg').textContent = '';
+  } catch (e){ $('pdfMsg').textContent = e.message; }
+  $('goPdf').disabled = false;
+};
+
+renderLevels(); renderPdfModes(); refreshKnown(); refreshBooks();
+</script>

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "board",
+      "runtimeExecutable": "C:\\Users\\Denis\\anaconda3\\python.exe",
+      "runtimeArgs": ["D:\\Cloude\\Translation_simplify_app\\server.py"],
+      "port": 8642
+    }
+  ]
+}

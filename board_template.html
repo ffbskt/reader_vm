@@ -1,0 +1,599 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vocabulary Coverage Board — Easy Spanish</title>
+<style>
+:root{
+  --bg:#F6F5F0; --panel:#FFFFFF; --panel2:#EFEDE6; --ink:#23282E; --muted:#6E6F66;
+  --line:#DDDBD0; --accent:#2D5FA8; --accent-ink:#FFFFFF; --known:#2E7D4F;
+  --known-bg:#E2EFE7; --unk:#A85B25; --unk-bg:#F5E8DC; --bad:#B3383E;
+  --chipfont:ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#15181D; --panel:#1D2127; --panel2:#242931; --ink:#E6E4DC; --muted:#9A9B90;
+  --line:#333941; --accent:#6E9BD8; --accent-ink:#10131A; --known:#6FBF8F;
+  --known-bg:#1E2F26; --unk:#D89A5E; --unk-bg:#33271B; --bad:#E07A80;
+}}
+:root[data-theme="dark"]{
+  --bg:#15181D; --panel:#1D2127; --panel2:#242931; --ink:#E6E4DC; --muted:#9A9B90;
+  --line:#333941; --accent:#6E9BD8; --accent-ink:#10131A; --known:#6FBF8F;
+  --known-bg:#1E2F26; --unk:#D89A5E; --unk-bg:#33271B; --bad:#E07A80;
+}
+:root[data-theme="light"]{
+  --bg:#F6F5F0; --panel:#FFFFFF; --panel2:#EFEDE6; --ink:#23282E; --muted:#6E6F66;
+  --line:#DDDBD0; --accent:#2D5FA8; --accent-ink:#FFFFFF; --known:#2E7D4F;
+  --known-bg:#E2EFE7; --unk:#A85B25; --unk-bg:#F5E8DC; --bad:#B3383E;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);margin:0;
+  font:15px/1.5 system-ui,'Segoe UI',sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+header h1{font-family:'Iowan Old Style',Palatino,Georgia,serif;
+  font-size:1.9rem;margin:0 0 4px;text-wrap:balance}
+header p{color:var(--muted);margin:0 0 6px;max-width:70ch}
+.src{font-size:.8rem;color:var(--muted)}
+.tiles{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0 26px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:12px 18px;min-width:150px;flex:1}
+.tile b{display:block;font-size:1.6rem;font-variant-numeric:tabular-nums}
+.tile span{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tile.warn b{color:var(--unk)}
+.tile.good b{color:var(--known)}
+nav{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:18px}
+nav button{border:none;background:none;color:var(--muted);font:inherit;font-weight:600;
+  padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px}
+nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+nav button:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section{display:none}section.on{display:block}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.controls input[type=search]{background:var(--panel);border:1px solid var(--line);
+  color:var(--ink);border-radius:5px;padding:6px 10px;font:inherit;width:200px}
+.langbox{display:flex;align-items:center;gap:8px;margin:14px 0 0}
+.langbox label{font-size:.78rem;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em}
+.langbox select{background:var(--panel);border:1px solid var(--line);color:var(--ink);
+  border-radius:5px;padding:6px 10px;font:inherit;cursor:pointer}
+.langbox .note{font-size:.8rem;color:var(--muted)}
+.ctl{display:inline-flex;flex-direction:column;gap:3px;font-size:.78rem;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.ctl input,.ctl select{background:var(--panel);border:1px solid var(--line);
+  color:var(--ink);border-radius:5px;padding:6px 10px;font:15px system-ui,sans-serif;
+  text-transform:none;letter-spacing:0}
+.ctl input{width:90px}
+.sp-pair{display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--panel);
+  border:1px solid var(--line);border-radius:6px;margin-bottom:10px;overflow:hidden}
+@media (max-width:760px){.sp-pair{grid-template-columns:1fr}}
+.sp-pair>div{padding:12px 16px}
+.sp-orig{color:var(--muted);border-right:1px solid var(--line);
+  font-family:'Iowan Old Style',Palatino,Georgia,serif}
+@media (max-width:760px){.sp-orig{border-right:none;border-bottom:1px solid var(--line)}}
+.sp-simple mark{background:var(--unk-bg);color:var(--unk);border-radius:3px;
+  padding:0 3px;font-weight:600}
+.sp-missing{background:var(--panel);border:1px dashed var(--line);border-radius:6px;
+  padding:18px 20px;color:var(--muted)}
+.sp-missing code{background:var(--panel2);padding:2px 6px;border-radius:4px;
+  font-family:var(--chipfont);font-size:.85rem}
+.colhead{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:8px;
+  font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+@media (max-width:760px){.colhead{display:none}}
+/* charts */
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto}
+.chart .grid{stroke:var(--line);stroke-width:1;shape-rendering:crispEdges}
+.chart .axis{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.chart .curve{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
+.charttip{position:absolute;pointer-events:none;background:var(--ink);
+  color:var(--bg);font-size:.78rem;padding:4px 9px;border-radius:5px;
+  white-space:nowrap;transform:translate(-50%,-130%);display:none;z-index:5;
+  font-variant-numeric:tabular-nums}
+.key{display:inline-block;width:10px;height:10px;border-radius:2px;
+  vertical-align:-1px}
+.cmd{background:var(--panel2);padding:3px 8px;border-radius:4px;
+  font-family:var(--chipfont);font-size:.82rem;user-select:all}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{border:none;background:var(--panel);color:var(--muted);font:inherit;
+  padding:6px 13px;cursor:pointer}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.panel h3{margin:0 0 4px;font-size:1rem}
+.panel .sub{font-size:.78rem;color:var(--muted);margin:0 0 10px}
+.words{display:flex;flex-wrap:wrap;gap:6px;max-height:430px;overflow-y:auto}
+.w{font-family:var(--chipfont);font-size:.85rem;background:var(--panel2);
+  border-radius:4px;padding:2px 8px;white-space:nowrap}
+.w small{color:var(--muted);margin-left:4px}
+.w.known{background:var(--known-bg);color:var(--known)}
+.w.unk{background:var(--unk-bg);color:var(--unk)}
+.w.extra{box-shadow:inset 0 0 0 1px var(--accent)}
+.legend{font-size:.78rem;color:var(--muted);margin-top:10px}
+.legend .w{font-size:.75rem}
+table{border-collapse:collapse;width:100%}
+th{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+  text-align:left;padding:6px 10px;border-bottom:2px solid var(--line)}
+td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle;
+  font-variant-numeric:tabular-nums}
+td .w{font-size:.9rem}
+.bar{background:var(--panel2);border-radius:3px;height:8px;width:110px;display:inline-block;
+  vertical-align:middle;margin-right:8px}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.score{font-weight:600}
+.chip{font-size:.7rem;border-radius:10px;padding:1px 8px;text-transform:uppercase;
+  letter-spacing:.05em}
+.chip.local{background:var(--panel2);color:var(--muted)}
+.chip.gemini{background:var(--accent);color:var(--accent-ink)}
+.rel{font-size:.8rem;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+/* examples */
+.excard{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:22px 24px;max-width:760px}
+.extext{font-family:'Iowan Old Style',Palatino,Georgia,serif;font-size:1.25rem;line-height:1.7}
+.extext mark{background:var(--unk-bg);color:var(--unk);border-radius:3px;padding:0 3px;
+  font-weight:600}
+.exmeta{display:flex;gap:16px;align-items:center;margin-top:14px;flex-wrap:wrap;
+  font-size:.85rem;color:var(--muted)}
+.meter{background:var(--panel2);height:8px;border-radius:3px;width:130px;display:inline-block;
+  vertical-align:middle}
+.meter i{display:block;height:100%;border-radius:3px}
+.exnav{display:flex;gap:10px;margin-top:18px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;
+  font-weight:600;border-radius:5px;padding:8px 18px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ok.picked{background:var(--known-bg);border-color:var(--known);color:var(--known)}
+.btn.no.picked{background:var(--unk-bg);border-color:var(--bad);color:var(--bad)}
+.counter{color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto}
+.verdict-note{font-size:.8rem;color:var(--muted);margin-top:10px}
+.unklist{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Vocabulary Coverage Board</h1>
+  <p>How well the words of <b>Book 1</b> (known vocabulary) cover the text of
+     <b>Book 2</b> — with probable pairings for the words that don't match.</p>
+  <p class="src" id="srcinfo"></p>
+  <div class="langbox">
+    <label for="langsel">Language</label>
+    <select id="langsel"></select>
+    <span class="note" id="langnote"></span>
+  </div>
+</header>
+
+<div class="tiles" id="tiles"></div>
+
+<nav>
+  <button class="on" data-tab="t-words">Word lists</button>
+  <button data-tab="t-pairs">Pairings</button>
+  <button data-tab="t-ex">Sentence examples</button>
+  <button data-tab="t-simp">Simplify page</button>
+</nav>
+
+<section id="t-words" class="on">
+  <div class="controls">
+    <div class="seg" id="ordseg">
+      <button class="on" data-ord="alpha">Alphabetical</button>
+      <button data-ord="rand">Random 30</button>
+    </div>
+    <input type="search" id="wsearch" placeholder="filter words…">
+    <button class="btn" id="reroll" hidden>Re-roll</button>
+  </div>
+  <div class="cols" style="margin-bottom:16px">
+    <div class="panel">
+      <h3>Word frequency in Book 2</h3>
+      <p class="sub">Top 120 words, sorted by repeats (descending). Amber bars =
+        not covered by Book 1.</p>
+      <div class="chart" id="zipfchart"></div>
+      <p class="legend"><span class="key" style="background:var(--accent)"></span> known
+        &nbsp;·&nbsp; <span class="key" style="background:var(--unk)"></span> unknown</p>
+    </div>
+    <div class="panel">
+      <h3>If you learn the top-N unknown words first…</h3>
+      <p class="sub">Token coverage of Book 2 after learning the N most frequent
+        unknown words (names excluded).</p>
+      <div class="chart" id="covchart"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <h3>Words to learn before reading</h3>
+    <p class="sub">Most frequent unknown words — learn these first, then add them
+      to the allowed vocabulary.</p>
+    <div class="controls" style="margin-bottom:10px">
+      <label class="ctl">Top N words
+        <input type="number" id="lf-top" min="10" max="1000" step="10" value="100"></label>
+      <label class="ctl">repeats &gt; n
+        <input type="number" id="lf-min" min="1" max="100" value="3"></label>
+      <button class="btn primary" id="lf-show">Show list</button>
+      <button class="btn" id="lf-copy">Copy list</button>
+    </div>
+    <p class="sub" id="lf-stat"></p>
+    <div class="words" id="lf-words" style="max-height:220px"></div>
+    <p class="verdict-note" style="margin-bottom:0">To add these to the allowed
+      words (as Book 1), run:
+      <code class="cmd" id="lf-cmd"></code></p>
+  </div>
+
+  <div class="cols">
+    <div class="panel">
+      <h3>Book 1 — known words</h3>
+      <p class="sub" id="b1sub"></p>
+      <div class="words" id="b1words"></div>
+    </div>
+    <div class="panel">
+      <h3>Book 2 — target text</h3>
+      <p class="sub" id="b2sub"></p>
+      <div class="words" id="b2words"></div>
+      <p class="legend">
+        <span class="w known">covered</span> found in Book 1 &nbsp;·&nbsp;
+        <span class="w unk">unknown</span> not in Book 1</p>
+    </div>
+  </div>
+</section>
+
+<section id="t-pairs">
+  <p class="sub" style="color:var(--muted);margin-top:0">Most frequent unknown
+    Book 2 words and their most similar Book 1 candidates. <span id="scorerinfo"></span></p>
+  <div class="tablewrap"><table id="pairtable">
+    <thead><tr><th>Unknown word</th><th>Freq</th><th>Best candidate</th>
+      <th>Similarity</th><th>Scorer</th><th>Other candidates</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section id="t-ex">
+  <div class="excard">
+    <div class="extext" id="extext"></div>
+    <div class="unklist" id="exunk"></div>
+    <div class="exmeta">
+      <span>Coverage: <span class="meter"><i id="exmeter"></i></span>
+        <b id="excov"></b></span>
+    </div>
+    <div class="exnav">
+      <button class="btn" id="exprev">← Prev</button>
+      <button class="btn primary" id="exnext">Next →</button>
+      <button class="btn ok" id="exok" title="mark: simple enough / pairing looks right">👍 Good</button>
+      <button class="btn no" id="exno" title="mark: needs simplification / bad pairing">👎 Needs work</button>
+      <span class="counter" id="excount"></span>
+    </div>
+    <p class="verdict-note" id="verdictnote"></p>
+  </div>
+  <p style="margin-top:14px">
+    <button class="btn" id="exportbtn">Export hand-review verdicts (JSON)</button>
+  </p>
+</section>
+
+<section id="t-simp">
+  <div class="controls">
+    <label class="ctl">Page
+      <input type="number" id="sp-page" min="38" max="276" value="41"></label>
+    <label class="ctl">Method
+      <select id="sp-method">
+        <option value="rewrite" selected>rewrite — simple words, free rewrite</option>
+        <option value="substitute">substitute — swap unknown words only</option>
+        <option value="gloss">gloss — keep text, add [synonym] hints</option>
+      </select></label>
+    <label class="ctl">% of unknown words
+      <input type="number" id="sp-pct" min="0" max="100" step="5" value="100"></label>
+    <button class="btn primary" id="sp-show">Simplify</button>
+    <span class="sub" id="sp-status" style="margin:0"></span>
+  </div>
+  <div id="sp-summary" class="tiles" style="margin:14px 0"></div>
+  <div id="sp-result"></div>
+</section>
+</div>
+
+<script>
+const DATA = __DATA_JSON__;
+
+// ---------- header ----------
+document.getElementById('srcinfo').textContent =
+  `Book 1: ${DATA.meta.book1} · Book 2: ${DATA.meta.book2}`;
+const tiles = [
+  {v: DATA.meta.book1_vocab.toLocaleString(), l:'Book 1 vocab (types)'},
+  {v: DATA.meta.book2_vocab.toLocaleString(), l:'Book 2 vocab (types)'},
+  {v: DATA.meta.type_coverage + '%', l:'Type coverage', c: DATA.meta.type_coverage>=80?'good':'warn'},
+  {v: DATA.meta.token_coverage + '%', l:'Token coverage (running text)', c: DATA.meta.token_coverage>=90?'good':'warn'},
+];
+document.getElementById('tiles').innerHTML = tiles.map(t=>
+  `<div class="tile ${t.c||''}"><b>${t.v}</b><span>${t.l}</span></div>`).join('');
+document.getElementById('scorerinfo').textContent = 'Scorer: ' + DATA.meta.scorer + '.';
+
+// ---------- language selector ----------
+// v1: only languages present in BOTH books are selectable; the default is the
+// most common language of Book 2. Vocab data is built for that language.
+const langs = DATA.meta.languages || [];
+const sel = document.getElementById('langsel');
+langs.forEach(l => {
+  const o = document.createElement('option');
+  o.value = l.code;
+  o.textContent = `${l.name} — Book 1: ${l.book1_pct}%, Book 2: ${l.book2_pct}%`
+    + (l.common ? '' : ' (not in both books)');
+  o.disabled = !l.common;
+  o.selected = !!l.default;
+  sel.appendChild(o);
+});
+function langNote() {
+  const l = langs.find(x => x.code === sel.value);
+  document.getElementById('langnote').textContent = l && l.default
+    ? `default: dominant language of Book 2 · ${DATA.meta.dropped_english} English words removed from Book 1 vocabulary`
+    : '';
+}
+sel.onchange = langNote;
+langNote();
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('section').forEach(s=>
+    s.classList.toggle('on', s.id===b.dataset.tab));
+});
+
+// ---------- word lists ----------
+let ord='alpha', query='';
+const b1 = DATA.book1_words, b2 = DATA.book2_words;
+document.getElementById('b1sub').textContent = b1.length.toLocaleString()+' words · count = occurrences';
+document.getElementById('b2sub').textContent = b2.length.toLocaleString()+' words';
+function sample(arr,n){const a=[...arr];for(let i=a.length-1;i>0;i--){
+  const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a.slice(0,n);}
+function renderWords(){
+  const f = w=>!query||w.w.includes(query);
+  let l1=b1.filter(f), l2=b2.filter(f);
+  if(ord==='rand'){l1=sample(l1,30);l2=sample(l2,30);}
+  else{l1=l1.slice(0,600);l2=l2.slice(0,600);}
+  document.getElementById('b1words').innerHTML=l1.map(x=>
+    `<span class="w${x.extra?' extra':''}" ${x.extra?'title="added via add_frequent.py"':''}>${x.w}<small>${x.n}</small></span>`).join('');
+  document.getElementById('b2words').innerHTML=l2.map(x=>
+    `<span class="w ${x.known?'known':'unk'}">${x.w}<small>${x.n}</small></span>`).join('');
+}
+document.getElementById('ordseg').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  ord=b.dataset.ord;
+  document.getElementById('ordseg').querySelectorAll('button')
+    .forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('reroll').hidden = ord!=='rand';
+  renderWords();
+});
+document.getElementById('reroll').onclick=renderWords;
+document.getElementById('wsearch').oninput=e=>{query=e.target.value.trim().toLowerCase();renderWords();};
+renderWords();
+
+// ---------- pairings ----------
+const tbody=document.querySelector('#pairtable tbody');
+tbody.innerHTML = DATA.pairs.map(p=>{
+  const best=p.candidates[0];
+  const others=p.candidates.slice(1).map(c=>
+    `<span class="w">${c.known}<small>${c.score}</small></span>`).join(' ');
+  if(!best) return `<tr><td><span class="w unk">${p.unknown}</span></td>
+    <td>${p.freq}</td><td colspan="4" class="rel">no candidate found</td></tr>`;
+  return `<tr><td><span class="w unk">${p.unknown}</span></td><td>${p.freq}</td>
+    <td><span class="w known">${best.known}</span>
+      ${best.relation?`<div class="rel">${best.relation}</div>`:''}</td>
+    <td><span class="bar"><i style="width:${best.score}%"></i></span>
+      <span class="score">${best.score}</span></td>
+    <td><span class="chip ${best.source}">${best.source}</span></td>
+    <td>${others}</td></tr>`;
+}).join('');
+
+// ---------- examples ----------
+const EX=DATA.examples; let exi=0;
+const verdicts=JSON.parse(localStorage.getItem('vocab_board_verdicts')||'{}');
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function renderEx(){
+  const e=EX[exi];
+  let html=esc(e.text);
+  for(const u of e.unknown){
+    html=html.replace(new RegExp('\\b('+u+')\\b','gi'),'<mark>$1</mark>');
+  }
+  document.getElementById('extext').innerHTML=html;
+  document.getElementById('exunk').innerHTML = e.unknown.length
+    ? e.unknown.map(u=>`<span class="w unk">${u}</span>`).join('')
+    : '<span class="rel">all words known ✓</span>';
+  document.getElementById('excov').textContent=e.coverage+'%';
+  const m=document.getElementById('exmeter');
+  m.style.width=e.coverage+'%';
+  m.style.background=e.coverage>=90?'var(--known)':e.coverage>=70?'var(--unk)':'var(--bad)';
+  document.getElementById('excount').textContent=(exi+1)+' / '+EX.length;
+  const v=verdicts[exi];
+  document.getElementById('exok').classList.toggle('picked',v==='good');
+  document.getElementById('exno').classList.toggle('picked',v==='bad');
+  document.getElementById('verdictnote').textContent = v
+    ? 'Your verdict: '+(v==='good'?'👍 good':'👎 needs work')
+    : 'No verdict yet — use 👍 / 👎 to hand-review this sentence.';
+}
+function vote(v){
+  verdicts[exi]=verdicts[exi]===v?undefined:v;
+  if(verdicts[exi]===undefined)delete verdicts[exi];
+  localStorage.setItem('vocab_board_verdicts',JSON.stringify(verdicts));
+  renderEx();
+}
+document.getElementById('exprev').onclick=()=>{exi=(exi-1+EX.length)%EX.length;renderEx();};
+document.getElementById('exnext').onclick=()=>{exi=(exi+1)%EX.length;renderEx();};
+document.getElementById('exok').onclick=()=>vote('good');
+document.getElementById('exno').onclick=()=>vote('bad');
+// ---------- frequency charts ----------
+const NS='http://www.w3.org/2000/svg';
+function svgEl(tag,attrs){const e=document.createElementNS(NS,tag);
+  for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function niceStep(max){const raw=max/4,p=Math.pow(10,Math.floor(Math.log10(raw)));
+  for(const m of [1,2,5,10]){if(raw<=m*p)return m*p;}return 10*p;}
+function makeTip(holder){const t=document.createElement('div');
+  t.className='charttip';holder.appendChild(t);return t;}
+
+const byFreq=[...b2].sort((a,b)=>b.n-a.n);
+const TOK_TOTAL=b2.reduce((s,w)=>s+w.n,0);
+const TOK_KNOWN=b2.reduce((s,w)=>s+(w.known?w.n:0),0);
+const unkByFreq=byFreq.filter(w=>!w.known);
+
+// chart 1: Zipf bars, top 120 words, colored known/unknown
+(function(){
+  const holder=document.getElementById('zipfchart'),tip=makeTip(holder);
+  const data=byFreq.slice(0,120);
+  const W=460,H=210,L=42,B=22,T=8,R=4,pw=W-L-R,ph=H-B-T;
+  const max=data[0].n,step=niceStep(max),ymax=Math.ceil(max/step)*step;
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,role:'img',
+    'aria-label':'Word frequency by rank, top 120 words of Book 2'});
+  for(let v=0;v<=ymax;v+=step){
+    const y=T+ph-v/ymax*ph;
+    svg.appendChild(svgEl('line',{x1:L,x2:W-R,y1:y,y2:y,class:'grid'}));
+    const lab=svgEl('text',{x:L-6,y:y+3.5,class:'axis','text-anchor':'end'});
+    lab.textContent=v;svg.appendChild(lab);
+  }
+  const bw=pw/data.length;
+  data.forEach((d,i)=>{
+    const h=d.n/ymax*ph,x=L+i*bw,y=T+ph-h;
+    const r=svgEl('rect',{x:x+0.5,y,width:Math.max(bw-1,1),height:h,rx:1,
+      fill:d.known?'var(--accent)':'var(--unk)'});
+    r.addEventListener('mousemove',ev=>{
+      tip.style.display='block';
+      tip.style.left=(x+bw/2)/W*100+'%';
+      tip.style.top=y/H*100+'%';
+      tip.textContent=`#${i+1} ${d.w} — ${d.n}×${d.known?'':' (unknown)'}`;
+    });
+    r.addEventListener('mouseleave',()=>tip.style.display='none');
+    svg.appendChild(r);
+  });
+  [1,30,60,90,120].forEach(rk=>{
+    const lab=svgEl('text',{x:L+(rk-0.5)*bw,y:H-6,class:'axis',
+      'text-anchor':'middle'});
+    lab.textContent=rk;svg.appendChild(lab);
+  });
+  holder.appendChild(svg);
+})();
+
+// chart 2: cumulative token coverage after learning top-N unknown words
+(function(){
+  const holder=document.getElementById('covchart'),tip=makeTip(holder);
+  const N=Math.min(500,unkByFreq.length);
+  let cum=TOK_KNOWN;
+  const pts=[{k:0,cov:TOK_KNOWN/TOK_TOTAL*100}];
+  for(let i=0;i<N;i++){cum+=unkByFreq[i].n;pts.push({k:i+1,cov:cum/TOK_TOTAL*100});}
+  const W=460,H=210,L=42,B=22,T=8,R=4,pw=W-L-R,ph=H-B-T;
+  const y0=Math.floor(pts[0].cov/10)*10,y1=100;
+  const X=k=>L+k/N*pw, Y=c=>T+ph-(c-y0)/(y1-y0)*ph;
+  const svg=svgEl('svg',{viewBox:`0 0 ${W} ${H}`,role:'img',
+    'aria-label':'Token coverage of Book 2 after learning the most frequent unknown words'});
+  for(let v=y0;v<=y1;v+=10){
+    svg.appendChild(svgEl('line',{x1:L,x2:W-R,y1:Y(v),y2:Y(v),class:'grid'}));
+    const lab=svgEl('text',{x:L-6,y:Y(v)+3.5,class:'axis','text-anchor':'end'});
+    lab.textContent=v+'%';svg.appendChild(lab);
+  }
+  [0,100,200,300,400,500].filter(k=>k<=N).forEach(k=>{
+    const lab=svgEl('text',{x:X(k),y:H-6,class:'axis','text-anchor':'middle'});
+    lab.textContent=k;svg.appendChild(lab);
+  });
+  svg.appendChild(svgEl('path',{class:'curve',
+    d:pts.map((p,i)=>(i?'L':'M')+X(p.k).toFixed(1)+' '+Y(p.cov).toFixed(1)).join('')}));
+  const dot=svgEl('circle',{r:4,fill:'var(--accent)',stroke:'var(--panel)',
+    'stroke-width':2,style:'display:none'});
+  svg.appendChild(dot);
+  svg.addEventListener('mousemove',ev=>{
+    const box=svg.getBoundingClientRect();
+    const k=Math.round(Math.min(Math.max((ev.clientX-box.left)/box.width*W-L,0)/pw,1)*N);
+    const p=pts[k];if(!p)return;
+    dot.style.display='';dot.setAttribute('cx',X(p.k));dot.setAttribute('cy',Y(p.cov));
+    tip.style.display='block';
+    tip.style.left=X(p.k)/W*100+'%';tip.style.top=Y(p.cov)/H*100+'%';
+    tip.textContent=`learn top ${p.k} → ${p.cov.toFixed(1)}% coverage`;
+  });
+  svg.addEventListener('mouseleave',()=>{tip.style.display='none';dot.style.display='none';});
+  holder.appendChild(svg);
+})();
+
+// ---------- words to learn before reading ----------
+let learnList=[];
+function renderLearn(){
+  const top=+document.getElementById('lf-top').value||100,
+        min=+document.getElementById('lf-min').value||3;
+  learnList=unkByFreq.filter(w=>w.n>min).slice(0,top);
+  const gain=learnList.reduce((s,w)=>s+w.n,0);
+  document.getElementById('lf-stat').textContent =
+    `${learnList.length} words · token coverage ${(TOK_KNOWN/TOK_TOTAL*100).toFixed(1)}% → `
+    + `${((TOK_KNOWN+gain)/TOK_TOTAL*100).toFixed(1)}% after learning them`;
+  document.getElementById('lf-words').innerHTML =
+    learnList.map(w=>`<span class="w unk">${w.w}<small>${w.n}</small></span>`).join('');
+  document.getElementById('lf-cmd').textContent =
+    `python add_frequent.py --top ${top} --min-freq ${min+1}`;
+}
+document.getElementById('lf-show').onclick=renderLearn;
+document.getElementById('lf-copy').onclick=()=>{
+  navigator.clipboard.writeText(learnList.map(w=>w.w).join('\n'));
+  document.getElementById('lf-copy').textContent='Copied ✓';
+  setTimeout(()=>document.getElementById('lf-copy').textContent='Copy list',1500);
+};
+renderLearn();
+
+// ---------- simplify page (live with buffer) ----------
+const SIMP = DATA.simplified || {};   // results baked at build time
+const spStatus=document.getElementById('sp-status');
+
+function drawSimp(r, source){
+  const sum=document.getElementById('sp-summary'),
+        res=document.getElementById('sp-result');
+  sum.innerHTML=[
+    {v:r.coverage_before+'%',l:'coverage before',c:'warn'},
+    {v:r.coverage_after+'%',l:'coverage after',c:r.coverage_after>=90?'good':'warn'},
+    {v:r.unknown_before+' → '+r.unknown_after,l:'unknown word types'},
+    {v:r.model,l:'model · '+source},
+  ].map(t=>`<div class="tile ${t.c||''}"><b>${t.v}</b><span>${t.l}</span></div>`).join('');
+  res.innerHTML='<div class="colhead"><div>Original (OCR)</div><div>Simplified</div></div>'
+    + r.sentences.map(s=>{
+    let simple=esc(s.simple||'');
+    for(const u of (s.unknown_after||[])){
+      simple=simple.replace(new RegExp('\\b('+u+')\\b','gi'),'<mark>$1</mark>');
+    }
+    const who=s.speaker?`<b>${esc(s.speaker)}.</b> — `:'';
+    return `<div class="sp-pair"><div class="sp-orig">${who}${esc(s.orig||'')}</div>
+      <div class="sp-simple">${who}${simple}</div></div>`;
+  }).join('');
+}
+
+function spOffline(page,method,pct){
+  const have=Object.values(SIMP).map(x=>
+    `page ${x.page} · ${x.method} · ${x.pct}%`).join(' &nbsp;|&nbsp; ')||'none yet';
+  document.getElementById('sp-summary').innerHTML='';
+  document.getElementById('sp-result').innerHTML=`<div class="sp-missing">
+    <p style="margin-top:0">Not in the buffer, and no local server reachable.
+    This artifact is a static snapshot — for live simplification open the board
+    via <code>python server.py</code> (http://localhost:8642/board.html), or run:</p>
+    <p><code>python simplify_page.py --page ${page} --method ${method} --pct ${pct}</code>
+    &nbsp;then&nbsp; <code>python build_board.py</code></p>
+    <p style="margin-bottom:0">Buffered results: ${have}</p></div>`;
+}
+
+let spBusy=false;
+async function renderSimp(){
+  if(spBusy)return;
+  const page=+document.getElementById('sp-page').value,
+        method=document.getElementById('sp-method').value,
+        pct=Math.max(0,Math.min(100,+document.getElementById('sp-pct').value||0)),
+        key=`${page}_${method}_${pct}`;
+  if(SIMP[key]){ drawSimp(SIMP[key],'from buffer'); spStatus.textContent=''; return; }
+  // not baked in: ask the local server (it also has a disk buffer)
+  spBusy=true;
+  spStatus.textContent='checking buffer / asking Gemini (new combination = 1 free-tier request)…';
+  try{
+    const resp=await fetch(`/api/simplify?page=${page}&method=${method}&pct=${pct}`);
+    const text=await resp.text();
+    let r;
+    try{ r=JSON.parse(text); }
+    catch{ // non-JSON reply = no live API behind this page (static artifact / wrong server)
+      spOffline(page,method,pct); spStatus.textContent=''; return; }
+    if(!resp.ok)throw new Error(r.error||resp.statusText);
+    SIMP[key]=r;
+    drawSimp(r, r.cached?'from buffer':'fresh · 1 request');
+    spStatus.textContent='';
+  }catch(e){
+    if(e instanceof TypeError){ spOffline(page,method,pct); spStatus.textContent=''; }
+    else{ spStatus.textContent='error: '+e.message; }
+  }finally{ spBusy=false; }
+}
+document.getElementById('sp-show').onclick=renderSimp;
+renderSimp();
+
+document.getElementById('exportbtn').onclick=()=>{
+  const out=Object.entries(verdicts).map(([i,v])=>({
+    index:+i, verdict:v, text:EX[+i].text, unknown:EX[+i].unknown}));
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='hand_review_verdicts.json';a.click();
+};
+renderEx();
+</script>

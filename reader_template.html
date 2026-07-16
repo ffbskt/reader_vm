@@ -1,0 +1,286 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Celestina — lector simplificado</title>
+<style>
+:root{
+  --paper:#F8F5EE; --card:#FFFFFF; --ink:#26221C; --muted:#8A8578;
+  --line:#E2DDD0; --wine:#7A2E35; --wine-soft:#F0E4E1; --seen:#9A9484;
+  --tipbg:#2A2622; --tipink:#F5F2EA;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#191B1F; --card:#22252B; --ink:#E7E3DA; --muted:#8F8B80;
+  --line:#33363D; --wine:#C98A90; --wine-soft:#3A2C2E; --seen:#7C786D;
+  --tipbg:#F0EDE5; --tipink:#26221C;
+}}
+:root[data-theme="dark"]{
+  --paper:#191B1F; --card:#22252B; --ink:#E7E3DA; --muted:#8F8B80;
+  --line:#33363D; --wine:#C98A90; --wine-soft:#3A2C2E; --seen:#7C786D;
+  --tipbg:#F0EDE5; --tipink:#26221C;
+}
+:root[data-theme="light"]{
+  --paper:#F8F5EE; --card:#FFFFFF; --ink:#26221C; --muted:#8A8578;
+  --line:#E2DDD0; --wine:#7A2E35; --wine-soft:#F0E4E1; --seen:#9A9484;
+  --tipbg:#2A2622; --tipink:#F5F2EA;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:Georgia,'Times New Roman',serif}
+.top{position:sticky;top:0;background:var(--paper);border-bottom:1px solid var(--line);
+  z-index:10}
+.topin{max-width:760px;margin:0 auto;padding:10px 20px;display:flex;
+  align-items:baseline;gap:14px;flex-wrap:wrap}
+.top h1{font-size:1.05rem;margin:0;font-weight:600;letter-spacing:.01em}
+.top .pageno{color:var(--muted);font-size:.85rem;
+  font-variant-numeric:tabular-nums;margin-left:auto}
+.pdfbtn{font-family:system-ui,sans-serif;font-size:.75rem;font-weight:600;
+  border:1px solid var(--line);background:var(--card);color:var(--muted);
+  border-radius:5px;padding:4px 10px;cursor:pointer}
+.pdfbtn:hover{color:var(--wine);border-color:var(--wine)}
+.progress{height:2px;background:var(--line)}
+.progress i{display:block;height:100%;background:var(--wine);transition:width .25s}
+.sheet{max-width:760px;margin:26px auto 120px;padding:0 20px}
+.pagecard{background:var(--card);border:1px solid var(--line);border-radius:8px;
+  padding:38px 44px 30px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+@media (max-width:600px){.pagecard{padding:22px 18px}}
+h2.pgtitle{font-size:.8rem;font-family:system-ui,sans-serif;font-weight:600;
+  text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 22px}
+h2.pgtitle b{color:var(--wine)}
+.line{margin:0 0 13px;font-size:1.16rem;line-height:1.75}
+.who{font-family:system-ui,sans-serif;font-size:.82em;font-weight:700;
+  letter-spacing:.06em;color:var(--wine)}
+.narr{color:var(--ink);font-style:italic}
+.w{border-radius:2px}
+.w.has{cursor:help}
+.w.new{border-bottom:2px solid var(--wine);background:var(--wine-soft)}
+.w.seen{border-bottom:1px dotted var(--seen)}
+/* vocabulary under the page */
+.vocab{margin-top:30px;border-top:2px solid var(--line);padding-top:14px}
+.vocab h3{font-family:system-ui,sans-serif;font-size:.78rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 10px}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px 26px;
+  font-size:.92rem;line-height:1.6}
+@media (max-width:600px){.vgrid{grid-template-columns:1fr}}
+.ventry b{color:var(--ink);font-weight:700}
+.ventry span{color:var(--muted)}
+.ventry.rep b{text-decoration:underline;text-decoration-style:solid;
+  text-underline-offset:3px;color:var(--muted);font-weight:600}
+.legend{font-family:system-ui,sans-serif;font-size:.75rem;color:var(--muted);
+  margin-top:14px;line-height:1.7}
+.legend .w{font-size:.85rem}
+/* nav */
+.nav{position:fixed;bottom:0;left:0;right:0;background:var(--paper);
+  border-top:1px solid var(--line)}
+.navin{max-width:760px;margin:0 auto;padding:12px 20px;display:flex;gap:12px;
+  align-items:center;font-family:system-ui,sans-serif}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);
+  font:inherit;font-weight:600;border-radius:6px;padding:9px 22px;cursor:pointer}
+.btn.primary{background:var(--wine);border-color:var(--wine);color:#fff}
+:root[data-theme="dark"] .btn.primary,
+.btn.primary{color:#fff}
+@media (prefers-color-scheme: dark){.btn.primary{color:#1A1C20}}
+:root[data-theme="dark"] .btn.primary{color:#1A1C20}
+:root[data-theme="light"] .btn.primary{color:#fff}
+.btn:disabled{opacity:.4;cursor:default}
+.navin .hint{color:var(--muted);font-size:.78rem;margin-left:auto}
+button:focus-visible{outline:2px solid var(--wine);outline-offset:2px}
+/* tooltip */
+#tip{position:fixed;display:none;background:var(--tipbg);color:var(--tipink);
+  font-family:system-ui,sans-serif;font-size:.84rem;line-height:1.45;
+  padding:7px 12px;border-radius:7px;pointer-events:none;z-index:50;
+  max-width:260px;box-shadow:0 3px 12px rgba(0,0,0,.25)}
+#tip .es{font-weight:700;margin-bottom:2px}
+#tip .tr{white-space:nowrap}
+#tip .lang{opacity:.55;font-size:.72rem;margin-right:6px}
+</style>
+
+<div class="top">
+  <div class="topin">
+    <h1>La Celestina · texto simplificado</h1>
+    <button class="pdfbtn" id="pdfbtn" title="descargar el libro completo en PDF">⤓ PDF</button>
+    <span class="pageno" id="pageno"></span>
+  </div>
+  <div class="progress"><i id="prog"></i></div>
+</div>
+
+<div class="sheet">
+  <div class="pagecard">
+    <h2 class="pgtitle">Página <b id="pgnum"></b> del original ·
+      cobertura <b id="pgcov"></b></h2>
+    <div id="text"></div>
+    <div class="vocab">
+      <h3>Vocabulario nuevo</h3>
+      <div class="vgrid" id="vgrid"></div>
+      <p class="legend">
+        <span class="w new">palabra</span> nueva en esta página — pasa el ratón
+        para ver la traducción &nbsp;·&nbsp;
+        <span class="w seen">palabra</span> ya apareció antes &nbsp;·&nbsp;
+        <u>subrayada</u> en la lista = ya la conoces de una página anterior</p>
+    </div>
+  </div>
+</div>
+
+<div class="nav"><div class="navin">
+  <button class="btn" id="prev">← Anterior</button>
+  <button class="btn primary" id="next">Siguiente →</button>
+  <span class="hint">también con las flechas ← → del teclado</span>
+</div></div>
+
+<div id="tip"></div>
+
+<script>
+const R = __READER_JSON__;
+const PAGES = R.pages, DICT = R.dict;
+const FOLD = {'á':'a','é':'e','í':'i','ó':'o','ú':'u','ñ':'n','ü':'u'};
+const fold = w => w.toLowerCase().replace(/[áéíóúñü]/g, c => FOLD[c]);
+
+// dictionary lookup with morphology: attached pronouns (consolarle),
+// plurals, and conjugated verbs mapped back to the infinitive (mataran)
+const CLITICS = ['selos','selas','selo','sela','melo','mela','telo','tela',
+  'nos','les','los','las','se','me','te','le','lo','la'];
+const VERB_ENDS = ('ariamos eriamos iriamos asteis isteis aramos ieramos ' +
+  'abamos iamos ieron ieran ierais iendo ando aria eria iria arias erias ' +
+  'irias arian erian irian ados adas idos idas ado ada ido ida aban abas ' +
+  'aba aran aras ara aren areis are eran eras era ere iran iras ira ire ' +
+  'aron aste iste asen ase iesen iese emos imos amos ais eis an en es as ' +
+  'os a e o i n s').split(' ').sort((a, b) => b.length - a.length);
+function lookup(word){
+  const rec = (k, depth) => {
+    if (DICT[k]) return DICT[k];
+    if (depth >= 3 || k.length < 4) return null;
+    for (const cl of CLITICS)
+      if (k.endsWith(cl) && k.length - cl.length >= 3){
+        const r = rec(k.slice(0, -cl.length), depth + 1);
+        if (r) return r;
+      }
+    for (const end of VERB_ENDS){
+      const stem = k.slice(0, -end.length);
+      if (k.endsWith(end) && stem.length >= 3){
+        const variants = [stem];
+        if (stem.includes('ie')) variants.push(stem.replace(/ie/g, 'e'));
+        if (stem.includes('ue')) variants.push(stem.replace(/ue/g, 'o'));
+        for (const st of variants){
+          if (DICT[st]) return DICT[st];
+          for (const inf of ['ar','er','ir'])
+            if (DICT[st + inf]) return DICT[st + inf];
+        }
+      }
+    }
+    return null;
+  };
+  return rec(fold(word), 0);
+}
+
+// cumulative "seen before page i" sets
+const seenBefore = [];
+{ let acc = new Set();
+  for (const p of PAGES){
+    seenBefore.push(new Set(acc));
+    for (const v of p.vocab) acc.add(fold(v.es));
+  } }
+
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const WORD_RE = /([A-Za-zÁÉÍÓÚÑÜáéíóúñü]+)/;
+
+function wrapWords(text, curVocab, seen){
+  return text.split(WORD_RE).map((part, i) => {
+    if (i % 2 === 0) return esc(part);
+    const k = fold(part);
+    const entry = lookup(part);
+    let cls = '';
+    if (curVocab.has(k)) cls = 'new';
+    else if (seen.has(k)) cls = 'seen';
+    if (!entry && !cls) return esc(part);
+    return `<span class="w ${cls}${entry ? ' has' : ''}"${
+      entry ? ` data-es="${esc(part)}"` : ''}>${esc(part)}</span>`;
+  }).join('');
+}
+
+let idx = Math.min(+localStorage.getItem('celestina_reader_page') || 0,
+                   PAGES.length - 1);
+
+function render(){
+  const p = PAGES[idx], seen = seenBefore[idx];
+  const curVocab = new Set(p.vocab.map(v => fold(v.es)));
+  document.getElementById('pgnum').textContent = p.page;
+  document.getElementById('pgcov').textContent = p.coverage_after + '%';
+  document.getElementById('pageno').textContent =
+    `${idx + 1} / ${PAGES.length}`;
+  document.getElementById('prog').style.width =
+    ((idx + 1) / PAGES.length * 100) + '%';
+
+  // group consecutive sentences by speaker
+  const groups = [];
+  for (const s of p.sentences){
+    const simple = (s.simple || '').trim();
+    if (!simple) continue;
+    const who = (s.speaker || '').trim().toUpperCase().replace(/\.+$/,'');
+    if (groups.length && groups[groups.length-1].who === who)
+      groups[groups.length-1].parts.push(simple);
+    else groups.push({who, parts: [simple]});
+  }
+  document.getElementById('text').innerHTML = groups.map(g => {
+    const body = wrapWords(g.parts.join(' '), curVocab, seen);
+    return g.who
+      ? `<p class="line"><span class="who">${esc(g.who)}.</span> — ${body}</p>`
+      : `<p class="line narr">${body}</p>`;
+  }).join('');
+
+  document.getElementById('vgrid').innerHTML = p.vocab.map(v =>
+    `<div class="ventry${v.repeat ? ' rep' : ''}"><b>${esc(v.es)}</b>
+      <span>– ${esc(v.en)} – ${esc(v.ru)}</span></div>`).join('');
+
+  document.getElementById('prev').disabled = idx === 0;
+  document.getElementById('next').disabled = idx === PAGES.length - 1;
+  localStorage.setItem('celestina_reader_page', idx);
+  window.scrollTo({top: 0});
+}
+
+function go(d){
+  const n = idx + d;
+  if (n < 0 || n >= PAGES.length) return;
+  idx = n; render();
+}
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+});
+
+// hover tooltip: two lines, EN and RU
+const tip = document.getElementById('tip');
+document.addEventListener('mouseover', e => {
+  const w = e.target.closest('.w.has');
+  if (!w) { tip.style.display = 'none'; return; }
+  const entry = lookup(w.dataset.es || w.textContent);
+  if (!entry) { tip.style.display = 'none'; return; }
+  tip.innerHTML = `<div class="es">${esc(w.textContent)}</div>
+    <div class="tr"><span class="lang">EN</span>${esc(entry.en)}</div>
+    <div class="tr"><span class="lang">RU</span>${esc(entry.ru)}</div>`;
+  tip.style.display = 'block';
+  const r = w.getBoundingClientRect(), tw = tip.offsetWidth;
+  let x = r.left + r.width / 2 - tw / 2;
+  x = Math.max(8, Math.min(x, innerWidth - tw - 8));
+  let y = r.top - tip.offsetHeight - 8;
+  if (y < 44) y = r.bottom + 8;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+document.addEventListener('mouseout', e => {
+  if (e.target.closest && e.target.closest('.w.has')) tip.style.display = 'none';
+});
+
+render();
+
+// download full PDF (embedded at build time so it works everywhere)
+const PDF_B64 = "__PDF_B64__";
+const pdfBtn = document.getElementById('pdfbtn');
+if (!PDF_B64) pdfBtn.style.display = 'none';
+pdfBtn.onclick = () => {
+  const bin = atob(PDF_B64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bytes], {type: 'application/pdf'}));
+  a.download = 'celestina_simplified_41_90.pdf';
+  a.click();
+};
+</script>
