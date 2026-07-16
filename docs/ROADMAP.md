@@ -102,10 +102,15 @@ Tunnel (no card), Hetzner €4 (PayPal).
 - [ ] 2b.3 Telegram bot: send PDF = upload book, /stats, /level, /translate
       (progress by editing one message), /pdf mode buttons.
       **Check:** full flow from the phone, no browser involved.
-- [ ] 2b.4 monitor.py + cron: disk/RAM/health/queue/429/backup-age checks ->
-      Telegram alerts to your chat; /admin/stats page.
-      **Check:** fill disk with a dummy file -> alert arrives in <5 min;
-      kill api container -> alert.
+- [x] 2b.4 2026-07-16: deploy/monitor.py on the VM (cron */5 as root):
+      disk >85%, memory <100 MB, /health, stuck jobs (>15 min silent),
+      failed/quota jobs -> Telegram alerts to the user's chat (bot
+      @ffbskt_reader_bot, chat id 318973541), with recovery messages and
+      6 h re-alert throttle. Secrets in VM .env (fixed a merged-line bug
+      there). Deferred: /admin/stats page, backup-age check (backups
+      live on the dev PC, invisible from the VM).
+      **Check:** PASSED — stopped the api container -> ⚠️ alert delivered;
+      started it -> ✅ recovery delivered; healthy run silent.
 - [ ] 2b.5 CI: GitHub Actions — pytest on push; on tag: build image, SSH
       deploy to VM.
       **Check:** change a UI string, `git push`, tag -> live on VM with no
