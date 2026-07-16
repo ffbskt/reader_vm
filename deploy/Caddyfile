@@ -1,5 +1,5 @@
-# No domain yet: plain HTTP on port 80 (the IP). When a domain arrives,
-# replace ":80" with the domain and Caddy adds HTTPS automatically.
-:80 {
+# Canonical address with automatic HTTPS (Let's Encrypt).
+# DuckDNS record is user-owned; IP updates via their update API.
+readersimple.duckdns.org {
 	reverse_proxy api:8100
 }
