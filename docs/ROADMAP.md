@@ -32,8 +32,12 @@ Tunnel (no card), Hetzner €4 (PayPal).
       config "api" (uvicorn, port 8100); 5 TestClient tests.
       **Check:** PASSED — curl /health ok, /me returns local user,
       Swagger /docs renders in browser; 20/20 tests green.
-- [ ] 1.4 Port endpoints: known sources, books, stats.
-      **Check:** upload both test books via curl; stats JSON = Phase 0 values.
+- [x] 1.4 2026-07-16: api/routes.py — GET/POST /known, DELETE /known/{slug},
+      GET/POST /books, GET /books/{slug}/stats (REST shapes from
+      ARCHITECTURE §4; raw-body uploads). 4 isolated tests (tmp data dir).
+      **Check:** PASSED — stats via new API == old server on every field;
+      live curl upload known+book -> correct stats; throwaway data removed;
+      24/24 tests green.
 - [ ] 1.5 Jobs in SQLite (`jobs`, `job_events` tables) + worker thread;
       port translate + gap-fill into it.
       **Check:** 1-page job on cached page runs free; events appear;

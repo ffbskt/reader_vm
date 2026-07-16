@@ -16,6 +16,7 @@ if ROOT not in sys.path:
 from fastapi import Depends, FastAPI
 
 from api.auth import get_current_user
+from api.routes import router as site_router
 
 VERSION = "0.1.0"
 
@@ -35,3 +36,5 @@ def health():
 def me(user: dict = Depends(get_current_user)):
     """The authenticated user's profile and tier (quota usage joins in 2b)."""
     return {"user": user}
+
+app.include_router(site_router)
