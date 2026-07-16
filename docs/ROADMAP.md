@@ -26,9 +26,12 @@ Tunnel (no card), Hetzner €4 (PayPal).
       tests: morphology lookup, vocab modes, level math, cache keying.
       **Check:** PASSED — 15/15 green; site stats/reader/pdf.html identical
       through shims (levels 202/1109/3839 unchanged).
-- [ ] 1.3 FastAPI skeleton: /health, /me (stub JWT, single local user),
-      OpenAPI docs page.
-      **Check:** `curl /health` = ok; /docs renders.
+- [x] 1.3 2026-07-16: api/ package — /health, /me behind get_current_user
+      (Phase-1 stub: any/no token = local user; JWT slots into
+      api/auth.py:verify_token in 2b). requirements.txt added; launch.json
+      config "api" (uvicorn, port 8100); 5 TestClient tests.
+      **Check:** PASSED — curl /health ok, /me returns local user,
+      Swagger /docs renders in browser; 20/20 tests green.
 - [ ] 1.4 Port endpoints: known sources, books, stats.
       **Check:** upload both test books via curl; stats JSON = Phase 0 values.
 - [ ] 1.5 Jobs in SQLite (`jobs`, `job_events` tables) + worker thread;

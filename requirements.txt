@@ -1,0 +1,12 @@
+# engine
+fpdf2
+pypdf
+requests
+
+# api backend
+fastapi
+uvicorn[standard]
+
+# dev/test
+pytest
+httpx

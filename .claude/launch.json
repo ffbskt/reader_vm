@@ -6,6 +6,12 @@
       "runtimeExecutable": "C:\\Users\\Denis\\anaconda3\\python.exe",
       "runtimeArgs": ["D:\\Cloude\\Translation_simplify_app\\server.py"],
       "port": 8642
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "C:\\Users\\Denis\\anaconda3\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "api.main:app", "--port", "8100"],
+      "port": 8100
     }
   ]
 }
