@@ -41,7 +41,24 @@ def health():
 @app.get("/me", tags=["auth"])
 def me(user: dict = Depends(get_current_user)):
     """The authenticated user's profile and tier (quota usage joins in 2b)."""
-    return {"user": user}
+    from api.auth import public_user
+    return {"user": public_user(user)}
+
+@app.get("/auth/config", tags=["auth"])
+def auth_config():
+    """What the SPA needs to render the Google button (client id is public)."""
+    from api.auth import GOOGLE_CLIENT_ID
+    return {"google_client_id": GOOGLE_CLIENT_ID}
+
+@app.post("/auth/google", tags=["auth"])
+def auth_google(body: dict):
+    """Exchange a verified Google ID token for our session JWT."""
+    from api.auth import login_google
+    try:
+        return login_google(body.get("id_token", ""))
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(401, f"Google token rejected: {e}")
 
 app.include_router(site_router)
 

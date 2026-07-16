@@ -18,6 +18,17 @@ import json, sqlite3, time
 from core import pipeline
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at REAL NOT NULL,
+  tier TEXT NOT NULL DEFAULT 'free',
+  email TEXT,
+  google_sub TEXT UNIQUE,
+  tg_id INTEGER UNIQUE,
+  name TEXT
+);
+INSERT OR IGNORE INTO users(id, created_at, tier, name)
+  VALUES(1, 0, 'free', 'local');
 CREATE TABLE IF NOT EXISTS jobs(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -111,6 +122,32 @@ def latest_job_for(book_slug, user_id):
             "SELECT id FROM jobs WHERE book_slug=? AND user_id=? "
             "ORDER BY id DESC LIMIT 1", (book_slug, user_id)).fetchone()
         return get_job(row["id"]) if row else None
+
+def get_user(user_id):
+    with get_db() as con:
+        row = con.execute("SELECT * FROM users WHERE id=?",
+                          (user_id,)).fetchone()
+        return dict(row) if row else None
+
+def user_by_google_sub(sub):
+    with get_db() as con:
+        row = con.execute("SELECT * FROM users WHERE google_sub=?",
+                          (sub,)).fetchone()
+        return dict(row) if row else None
+
+def attach_google(user_id, sub, email, name):
+    with get_db() as con:
+        con.execute("UPDATE users SET google_sub=?, email=?, name=? "
+                    "WHERE id=?", (sub, email, name, user_id))
+    return get_user(user_id)
+
+def create_google_user(sub, email, name):
+    with get_db() as con:
+        cur = con.execute(
+            "INSERT INTO users(created_at, email, google_sub, name) "
+            "VALUES(?,?,?,?)", (time.time(), email, sub, name))
+        uid = cur.lastrowid
+    return get_user(uid)     # outside the write txn: no self-deadlock
 
 def active_job_for(book_slug, level, user_id):
     with get_db() as con:

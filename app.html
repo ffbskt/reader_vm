@@ -73,6 +73,8 @@ a.readlink{color:var(--accent);font-weight:600}
 </style>
 
 <div class="wrap">
+<div id="auth" style="float:right;display:flex;gap:10px;align-items:center;
+  font-size:.85rem;color:var(--muted)"></div>
 <h1>Text simplifier</h1>
 <p class="sub">Full pipeline: teach the app which words you already know,
 upload a hard book, choose how much difficulty to keep, translate it with
@@ -157,11 +159,52 @@ Gemini, then read online with hover translations or download a PDF.</p>
 
 <script>
 const $ = id => document.getElementById(id);
-const api = (path, opts) => fetch(path, opts).then(async r => {
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) d.error = d.error || d.detail || ('HTTP ' + r.status);
-  return d;
-});
+const JWT = () => localStorage.getItem('jwt');
+const authHeaders = () => JWT() ? {Authorization: 'Bearer ' + JWT()} : {};
+const api = (path, opts = {}) => fetch(path,
+  {...opts, headers: {...authHeaders(), ...(opts.headers || {})}})
+  .then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401 && JWT()){          // expired session: sign out
+      localStorage.removeItem('jwt'); localStorage.removeItem('user');
+      location.reload();
+    }
+    if (!r.ok) d.error = d.error || d.detail || ('HTTP ' + r.status);
+    return d;
+  });
+
+// ---- Google sign-in (2b.1) ----
+async function initAuth(){
+  const box = $('auth');
+  const u = JSON.parse(localStorage.getItem('user') || 'null');
+  if (u && JWT()){
+    box.innerHTML = `<span>👤 ${u.email || u.name || 'user'}</span>
+      <button class="del" id="signout">sign out</button>`;
+    $('signout').onclick = () => { localStorage.removeItem('jwt');
+      localStorage.removeItem('user'); location.reload(); };
+    return;
+  }
+  const cfg = await api('/auth/config');
+  if (!cfg.google_client_id) return;         // login not configured yet
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.onload = () => {
+    google.accounts.id.initialize({client_id: cfg.google_client_id,
+      callback: async resp => {
+        const d = await api('/auth/google', {method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({id_token: resp.credential})});
+        if (d.token){
+          localStorage.setItem('jwt', d.token);
+          localStorage.setItem('user', JSON.stringify(d.user));
+          location.reload();
+        } else alert(d.error || 'login failed');
+      }});
+    google.accounts.id.renderButton(box, {theme: 'outline', size: 'medium'});
+  };
+  document.head.appendChild(s);
+}
+initAuth();
 
 let book = null, stats = null, level = 25;
 const LEVEL_INFO = [
@@ -335,7 +378,8 @@ function renderPdfModes(){
 $('goPdf').onclick = async () => {
   $('pdfMsg').textContent = 'building…'; $('goPdf').disabled = true;
   try {
-    const r = await fetch(`/books/${book}/pdf?level=${level}&mode=${pdfMode}`);
+    const r = await fetch(`/books/${book}/pdf?level=${level}&mode=${pdfMode}`,
+                          {headers: authHeaders()});
     if (!r.ok){ const d = await r.json(); throw new Error(d.error || r.status); }
     const blob = await r.blob();
     const a = document.createElement('a');

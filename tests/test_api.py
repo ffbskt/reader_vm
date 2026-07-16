@@ -15,11 +15,11 @@ def test_health():
 def test_me_without_token_is_local_user():
     r = client.get("/me")
     assert r.status_code == 200
-    assert r.json()["user"]["login"] == "local"
+    assert r.json()["user"]["id"] == 1
 
-def test_me_with_bearer_token():
+def test_me_with_garbage_bearer_token_is_401():
     r = client.get("/me", headers={"Authorization": "Bearer x"})
-    assert r.status_code == 200
+    assert r.status_code == 401
 
 def test_me_with_malformed_header_is_401():
     r = client.get("/me", headers={"Authorization": "whatever"})

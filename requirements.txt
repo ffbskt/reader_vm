@@ -6,6 +6,7 @@ requests
 # api backend
 fastapi
 uvicorn[standard]
+google-auth
 
 # dev/test
 pytest
