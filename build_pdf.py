@@ -16,9 +16,21 @@ sys.path.insert(0, HERE)
 from fpdf import FPDF
 from vocab_common import load_dictionary, page_new_words, new_state, MODES
 
-FONT = r"C:\Windows\Fonts\arial.ttf"
-FONT_B = r"C:\Windows\Fonts\arialbd.ttf"
-FONT_I = r"C:\Windows\Fonts\ariali.ttf"
+# regular / bold / italic with Latin + Cyrillic coverage, per platform
+_FONT_SETS = [
+    (r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf",
+     r"C:\Windows\Fonts\ariali.ttf"),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"),
+]
+FONT = FONT_B = FONT_I = None
+for _f, _b, _i in _FONT_SETS:
+    if os.path.exists(_f) and os.path.exists(_b):
+        FONT, FONT_B, FONT_I = _f, _b, _i
+        break
+if FONT is None:
+    sys.exit("no usable TTF fonts found (need Arial or DejaVu Sans)")
 
 def mark_words(text, words):
     """Wrap occurrences of vocabulary words in fpdf2 markdown underline."""

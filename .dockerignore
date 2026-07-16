@@ -1,0 +1,18 @@
+# secrets must NEVER enter the image
+API_KEY.txt
+gemini_key.txt
+.env
+.env.*
+
+# user data lives in a volume, not the image
+data/
+
+# not needed in the container
+.git/
+.claude/
+__pycache__/
+tests/
+board.html
+reader.html
+pdf.html
+docs/

@@ -1,0 +1,5 @@
+# No domain yet: plain HTTP on port 80 (the IP). When a domain arrives,
+# replace ":80" with the domain and Caddy adds HTTPS automatically.
+:80 {
+	reverse_proxy api:8100
+}
