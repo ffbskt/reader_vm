@@ -44,13 +44,14 @@ Tunnel (no card), Hetzner €4 (PayPal).
       (card for identity, $0 during trial); later upgrade billing account
       within 90 days to keep the free tier permanently.
       **Check:** console opens; budget alert at $1 configured.
-- [ ] 2a.2 USER+Claude: create free-tier VM — e2-micro, us-west1/central1/
-      east1, Ubuntu 24.04, 30 GB standard disk, SSH key from this PC.
-      **Check:** `ssh <user>@<ip>` works from this PC.
-- [ ] 2a.3 Claude (via your terminal or SSH): base setup — updates,
-      unattended-upgrades, GCP firewall rules (22, 80, 443 only), fail2ban,
-      2 GB swap file (1 GB RAM box), Docker + compose plugin.
-      **Check:** `docker run hello-world` ok; port scan shows only 22/80/443.
+- [x] 2a.2 2026-07-16: reader-vm, e2-micro, us-central1-f, Ubuntu 26.04,
+      30 GB standard disk, IP 35.254.216.89, user denis-reader, key
+      ~/.ssh/gcp_reader.
+      **Check:** PASSED — ssh from dev PC works.
+- [x] 2a.3 2026-07-16: apt upgraded, unattended-upgrades + fail2ban active,
+      2 GB swap, Docker + Compose v5.3.1.
+      **Check:** PASSED — hello-world runs; only port 22 listening
+      (80/443 open in GCP firewall, used once Caddy deploys).
 - [ ] 2a.4 Dockerfile + docker-compose.yml (api, worker, caddy) run LOCALLY.
       **Check:** the Phase 1 checks all pass against `localhost` compose.
 - [ ] 2a.5 First deploy: clone repo on VM, `.env` (chmod 600) with PROD
