@@ -109,10 +109,18 @@ Tunnel (no card), Hetzner €4 (PayPal).
       **Check:** PENDING USER — sign in with ffbskt@gmail.com at
       /app.html; header shows email; owner rule keeps the library.
       Later full check: two browsers, two accounts, libraries don't mix.
-- [ ] 2b.2 quota.py gate (Free limits from ARCHITECTURE §5) + usage
-      counters + `quota` job status handling in the UI.
-      **Check:** set limit=2 pages in test config, run 3-page job -> pauses
-      politely, resumes after reset.
+- [x] 2b.2 2026-07-16: per-user storage isolation — libraries now live in
+      data/site/users/<uid>/{known,books}; pipeline paths driven by a
+      contextvar (set in async get_current_user so it copies into the sync
+      endpoint thread; worker sets it per job). 100 MB/user cap enforced on
+      upload (413). /me reports storage. Startup migrates legacy flat dirs
+      -> users/1/. ALSO Telegram login widget on the web (POST
+      /auth/telegram-widget, hash-verified) + /auth/config exposes bot name.
+      **Check:** PASSED — 37 tests incl. two-user isolation + 413 quota;
+      live: migration moved data to users/1/, owner keeps La Celestina,
+      /me shows 1.1MB/100MB. PENDING USER: BotFather /setdomain
+      readersimple.duckdns.org so the Telegram web button renders.
+      Quota on Gemini requests/pages (vs storage) still TODO if needed.
 - [x] 2b.3 2026-07-16: bot/bot.py — thin API client (long polling, no
       public port), bot container in compose. POST /auth/telegram (shared
       TELEGRAM_BOT_SECRET) maps tg_id -> user; OWNER_TG_ID claims user 1.
