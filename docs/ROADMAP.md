@@ -94,7 +94,19 @@ Tunnel (no card), Hetzner €4 (PayPal).
 
 - [ ] 2b.1 Google OAuth + Telegram Login -> users table; JWT sessions;
       per-user data dirs; migrate existing library to your user.
-      **Check:** two browsers, two accounts, libraries don't mix.
+      2026-07-16 DONE: users table (user 1 = legacy 'local'); HS256 JWT
+      sessions (JWT_SECRET in VM .env); POST /auth/google verifies the
+      Google ID token (google-auth) — owner email claims user 1 and its
+      library; GET /auth/config; Sign-in-with-Google button + Bearer
+      headers in app.html/reader_site.html; anonymous still = user 1
+      until REQUIRE_AUTH=1 (flips in 2b.2). 32/32 tests.
+      PENDING: USER creates the OAuth Client ID (console steps in chat),
+      then GOOGLE_CLIENT_ID -> VM .env + live login test. Telegram Login
+      lands with the bot (2b.3); per-user data dirs land with quotas
+      (2b.2).
+      **Check (so far):** garbage Bearer -> 401 live; owner-claim,
+      new-user and expiry paths covered by tests. Full check once the
+      client id exists: two browsers, two accounts, libraries don't mix.
 - [ ] 2b.2 quota.py gate (Free limits from ARCHITECTURE §5) + usage
       counters + `quota` job status handling in the UI.
       **Check:** set limit=2 pages in test config, run 3-page job -> pauses
