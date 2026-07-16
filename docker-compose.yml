@@ -14,6 +14,8 @@ services:
     restart: unless-stopped
     env_file: .env
     command: ["python", "bot/bot.py"]
+    healthcheck:
+      disable: true          # long-poll worker, no web port to probe
     volumes:
       - ./data:/app/data
     depends_on:
