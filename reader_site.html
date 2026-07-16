@@ -166,7 +166,7 @@ document.getElementById('next').onclick = () => { cur++; render(); scrollTo(0,0)
 document.getElementById('pageSel').onchange = e => { cur = +e.target.value; render(); };
 
 (async () => {
-  const r = await fetch(`/api/site/reader_data?book=${qs.get('book')}&level=${qs.get('level') || 0}`);
+  const r = await fetch(`/books/${qs.get('book')}/reader?level=${qs.get('level') || 0}`);
   data = await r.json();
   document.getElementById('title').textContent = data.title || 'Reader';
   document.getElementById('lv').textContent = 'level ' + data.level;

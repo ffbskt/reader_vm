@@ -14,6 +14,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import FileResponse
 
 from api.auth import get_current_user
 from api.routes import router as site_router
@@ -43,3 +44,14 @@ def me(user: dict = Depends(get_current_user)):
     return {"user": user}
 
 app.include_router(site_router)
+
+# the two SPA pages, served explicitly (never expose the whole repo dir —
+# it contains the API key file)
+@app.get("/", include_in_schema=False)
+@app.get("/app.html", include_in_schema=False)
+def spa():
+    return FileResponse(os.path.join(ROOT, "app.html"))
+
+@app.get("/reader_site.html", include_in_schema=False)
+def reader_page():
+    return FileResponse(os.path.join(ROOT, "reader_site.html"))

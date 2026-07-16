@@ -4,18 +4,20 @@ Site endpoints (ARCHITECTURE.md §4), thin wrappers over core.pipeline.
 Uploads are raw request bodies (the web client sends the File object
 directly; the Telegram bot forwards the downloaded document the same way).
 """
-import os, sys
+import json, os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api import db, worker
 from api.auth import get_current_user
 from core import pipeline
+from core.vocab import MODES
 
 MAX_UPLOAD = 200 * 1024 * 1024
 
@@ -123,3 +125,46 @@ def latest_job(book: str = Query(...),
     """The most recent job for a book (client convenience on reload)."""
     job = db.latest_job_for(book, user["id"])
     return job or {"status": "idle", "book_slug": book}
+
+# ---------------- reader + PDF ----------------
+
+@router.get("/books/{slug}/reader", tags=["reader"])
+def reader_data(slug: str, level: int = 0,
+                user: dict = Depends(get_current_user)):
+    """Simplified pages at one level + the merged hover dictionary."""
+    try:
+        return pipeline.reader_payload(slug, level)
+    except FileNotFoundError:
+        raise HTTPException(404, f"book {slug!r} not found")
+
+@router.get("/books/{slug}/pdf", tags=["reader"])
+def build_pdf(slug: str, level: int = 0, mode: str = "repeat",
+              user: dict = Depends(get_current_user)):
+    """Learner PDF from the translated pages, in one of the 4 vocabulary
+    modes. Pure local work — no API calls."""
+    if mode not in MODES:
+        raise HTTPException(400, f"mode must be one of {list(MODES)}")
+    done = pipeline.cached_pages(slug, level)
+    if not done:
+        raise HTTPException(400, "no translated pages at this level yet")
+    bdir = pipeline.book_dir(slug)
+    meta = json.load(open(os.path.join(bdir, "meta.json"), encoding="utf-8"))
+    out = os.path.join(bdir, f"{meta['slug']}_L{level}_{mode}.pdf")
+    r = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "build_pdf.py"),
+         "--from", str(done[0]), "--to", str(done[-1]),
+         "--mode", mode, "--out", out,
+         "--dir", os.path.join(bdir, "simplified"),
+         "--pattern", f"page{{n}}_L{level}.json",
+         "--title", meta["title"], "--author", "",
+         "--known-note", "al vocabulario del estudiante"],
+        capture_output=True, text=True, encoding="utf-8",
+        cwd=ROOT, timeout=300)
+    if r.returncode != 0 or not os.path.exists(out):
+        raise HTTPException(
+            500, (r.stderr or r.stdout or "build failed")[-400:])
+    body = open(out, "rb").read()
+    fname = os.path.basename(out)
+    return Response(content=body, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{fname}"',
+        "Cache-Control": "no-store"})

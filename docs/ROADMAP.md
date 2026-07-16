@@ -45,10 +45,15 @@ Tunnel (no card), Hetzner €4 (PayPal).
       db.py. job.json path still serves the legacy wizard until 1.6.
       **Check:** PASSED — live 5-page cached job: $0, pct 100, five
       page_done + job_done events; 27/27 tests green.
-- [ ] 1.6 Port reader + PDF endpoints; app.html + reader_site.html call the
-      new API (static SPA).
-      **Check:** full wizard in browser: stats -> level -> job -> reader
-      hover -> all 4 PDFs. Same results as Phase 0.
+- [x] 1.6 2026-07-16: GET /books/{slug}/reader + /books/{slug}/pdf; SPA
+      pages served explicitly at / and /reader_site.html (never the repo
+      dir — API key lives there); app.html + reader_site.html rewired to
+      the REST endpoints. server.py stays for the legacy Celestina board.
+      **Check:** PASSED — full wizard driven in browser on :8100 (known
+      1727 -> stats 59% -> level cards -> live job w/ ETA + gap_fill event
+      -> reader 23/23 hover tooltips -> all 4 PDF modes 200). Note: the
+      wizard check translated pages 41-45 at level 25 (6 free-tier
+      requests) — now cached. 27/27 tests green. PHASE 1 COMPLETE.
 
 ## Phase 2a — Google Cloud VM up (user + Claude together)
 

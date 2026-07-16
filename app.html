@@ -157,8 +157,11 @@ Gemini, then read online with hover translations or download a PDF.</p>
 
 <script>
 const $ = id => document.getElementById(id);
-const api = (a, q = {}) =>
-  fetch('/api/site/' + a + '?' + new URLSearchParams(q)).then(r => r.json());
+const api = (path, opts) => fetch(path, opts).then(async r => {
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) d.error = d.error || d.detail || ('HTTP ' + r.status);
+  return d;
+});
 
 let book = null, stats = null, level = 25;
 const LEVEL_INFO = [
@@ -175,14 +178,15 @@ let pdfMode = 'spaced';
 
 // ---- step 1: known sources ----
 async function refreshKnown(){
-  const d = await api('known');
+  const d = await api('/known');
   $('knownTotal').textContent = d.total_known;
   $('knownList').innerHTML = d.sources.map(s =>
     `<li><b>${s.name}</b><span class="k">${s.kind}</span>
      <span class="k">${s.count} words</span>
      <button class="del" data-s="${s.slug}">remove</button></li>`).join('');
   document.querySelectorAll('#knownList .del').forEach(b =>
-    b.onclick = async () => { await api('known_delete', {slug: b.dataset.s});
+    b.onclick = async () => { await api('/known/' + b.dataset.s,
+                                        {method: 'DELETE'});
                               refreshKnown(); if (book) loadStats(); });
 }
 $('knownUp').onclick = async () => {
@@ -190,9 +194,8 @@ $('knownUp').onclick = async () => {
   if (!files.length) return $('knownMsg').textContent = 'choose a file first';
   $('knownMsg').textContent = '';
   for (const f of files){
-    const r = await fetch('/api/site/upload?kind=known&name=' +
-      encodeURIComponent(f.name), {method: 'POST', body: f});
-    const d = await r.json();
+    const d = await api('/known?name=' + encodeURIComponent(f.name),
+                        {method: 'POST', body: f});
     if (d.error) $('knownMsg').textContent = d.error;
   }
   refreshKnown(); if (book) loadStats();
@@ -200,7 +203,7 @@ $('knownUp').onclick = async () => {
 
 // ---- step 2: books + stats ----
 async function refreshBooks(sel){
-  const d = await api('books');
+  const d = await api('/books');
   $('bookSel').innerHTML = '<option value="">— choose a book —</option>' +
     d.books.map(b => `<option value="${b.slug}">${b.title} (${b.pages} p.)</option>`).join('');
   if (sel){ $('bookSel').value = sel; $('bookSel').onchange(); }
@@ -209,9 +212,8 @@ $('bookUp').onclick = async () => {
   const f = $('bookFile').files[0];
   if (!f) return $('bookMsg').textContent = 'choose a file first';
   $('bookMsg').textContent = 'uploading…';
-  const r = await fetch('/api/site/upload?kind=book&name=' +
-    encodeURIComponent(f.name), {method: 'POST', body: f});
-  const d = await r.json();
+  const d = await api('/books?name=' + encodeURIComponent(f.name),
+                      {method: 'POST', body: f});
   $('bookMsg').textContent = d.error || '';
   if (!d.error) refreshBooks(d.slug);
 };
@@ -222,7 +224,7 @@ $('bookSel').onchange = () => {
   if (book) loadStats();
 };
 async function loadStats(){
-  const d = await api('stats', {book});
+  const d = await api(`/books/${book}/stats`);
   if (d.error) return $('bookMsg').textContent = d.error;
   stats = d;
   $('stats').style.display = '';
@@ -270,8 +272,10 @@ function renderLevels(){
 let poll = null;
 $('goTr').onclick = async () => {
   $('jerr').textContent = '';
-  const d = await api('translate',
-    {book, from: $('pFrom').value, to: $('pTo').value, level});
+  const d = await api(`/books/${book}/translate`, {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({level, from: +$('pFrom').value,
+                          to: +$('pTo').value})});
   if (d.error) return $('jerr').textContent = d.error;
   trackJob();
 };
@@ -283,23 +287,25 @@ function trackJob(){
 }
 async function refreshJob(){
   if (!book) return;
-  const j = await api('job', {book});
+  const j = await api(`/jobs?book=${book}`);
   if (j.status === 'idle' || !j.status){ $('jline').textContent = ''; return; }
   $('jbarWrap').style.display = '';
   $('jbar').style.width = (j.pct || 0) + '%';
-  const eta = j.eta_s == null ? '' :
+  const eta = !j.eta_s ? '' :
     ` · ~${Math.floor(j.eta_s / 60)}m ${j.eta_s % 60}s left`;
   $('jline').textContent =
-    `${j.status} · level ${j.level} · page ${j.current ?? '—'} · ` +
+    `${j.status} · level ${j.level} · page ${j.current_page ?? '—'} · ` +
     `${j.done}/${j.total} (${j.pct || 0}%)${eta}` +
     (j.cached ? ` · ${j.cached} from cache (free)` : '');
-  $('jerr').textContent = (j.errors || []).join('\n');
-  if (j.status !== 'running'){ clearInterval(poll); poll = null; updateReadPdf(); }
+  $('jerr').textContent = j.error || '';
+  if (j.status === 'running' || j.status === 'queued'){
+    if (!poll) trackJob();
+  } else { clearInterval(poll); poll = null; updateReadPdf(); }
 }
 // ---- steps 5+6 ----
 async function updateReadPdf(){
   if (!book) return;
-  const d = await api('books');
+  const d = await api('/books');
   const b = d.books.find(x => x.slug === book);
   const n = b ? (b.done_pages[level] || 0) : 0;
   $('readLink').href = `reader_site.html?book=${book}&level=${level}`;
@@ -321,7 +327,7 @@ function renderPdfModes(){
 $('goPdf').onclick = async () => {
   $('pdfMsg').textContent = 'building…'; $('goPdf').disabled = true;
   try {
-    const r = await fetch(`/api/site/build_pdf?book=${book}&level=${level}&mode=${pdfMode}`);
+    const r = await fetch(`/books/${book}/pdf?level=${level}&mode=${pdfMode}`);
     if (!r.ok){ const d = await r.json(); throw new Error(d.error || r.status); }
     const blob = await r.blob();
     const a = document.createElement('a');
