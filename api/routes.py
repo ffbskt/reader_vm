@@ -15,7 +15,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from api import db, worker
+from api import db, limits, worker
 from api.auth import get_current_user
 from core import pipeline
 from core.vocab import MODES
@@ -114,9 +114,25 @@ def translate(slug: str, req: TranslateReq,
     p_to = min(max(pages), req.page_to)
     if p_from > p_to:
         raise HTTPException(400, "empty page range")
+    if p_to - p_from + 1 > limits.MAX_RANGE:
+        raise HTTPException(400, f"range too large (max {limits.MAX_RANGE} "
+                                 "pages per request)")
     if db.active_job_for(slug, req.level, user["id"]) is not None:
         raise HTTPException(409, "a job for this book+level is already "
                                  "queued or running")
+    if db.running_jobs_for_user(user["id"]) >= limits.MAX_CONCURRENT_JOBS:
+        raise HTTPException(429, "you already have a translation running — "
+                                 "wait for it to finish")
+    # only pages not already cached will cost a Gemini call and count to quota
+    cached = set(pipeline.cached_pages(slug, req.level))
+    new_pages = [p for p in range(p_from, p_to + 1) if p not in cached]
+    used = db.usage_today(user["id"])
+    if used + len(new_pages) > limits.DAILY_PAGES:
+        left = max(0, limits.DAILY_PAGES - used)
+        raise HTTPException(429,
+            f"daily translation limit reached ({limits.DAILY_PAGES} new "
+            f"pages/day). {left} left today; {len(new_pages)} needed. "
+            "Cached pages are always free.")
     job_id = db.create_job(user["id"], slug, req.level, p_from, p_to)
     worker.wake()
     return db.get_job(job_id)

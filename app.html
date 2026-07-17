@@ -214,13 +214,26 @@ async function initAuth(){
   const box = $('auth');
   const u = JSON.parse(localStorage.getItem('user') || 'null');
   if (u && JWT()){
-    box.innerHTML = `<span class="userchip">👤 ${u.email || u.name || 'user'}</span>
+    box.innerHTML = `<span class="userchip" id="uchip">👤 ${u.email || u.name || 'user'}</span>
       <button class="btn-ghost" id="signout">sign out</button>`;
     $('signout').onclick = () => { localStorage.removeItem('jwt');
       localStorage.removeItem('user'); location.reload(); };
-    return;
+    // storage + daily quota next to the name
+    api('/me').then(d => { if (d.storage) $('uchip').title =
+      `storage ${(d.storage.used/1048576).toFixed(1)}/${(d.storage.limit/1048576)|0} MB`
+      + ` · today ${d.quota.pages_today}/${d.quota.pages_limit} pages`;
+      const q = d.quota ? ` · ${d.quota.pages_today}/${d.quota.pages_limit} pages today` : '';
+      $('uchip').textContent = `👤 ${u.email || u.name || 'user'} · `
+        + `${(d.storage.used/1048576).toFixed(1)}/${(d.storage.limit/1048576)|0} MB${q}`; });
+    return true;
   }
   const cfg = await api('/auth/config');
+  if (cfg.require_auth){
+    box.insertAdjacentHTML('afterend',
+      '<p class="sub" id="loginNote" style="color:var(--unk)">Please sign in '
+      + '(top-right) to upload books and translate. Your library is private '
+      + 'to your account, with 100 MB and a daily translation limit.</p>');
+  }
   // Google button
   if (cfg.google_client_id){
     const s = document.createElement('script');
@@ -249,8 +262,8 @@ async function initAuth(){
     t.setAttribute('data-request-access', 'write');
     box.appendChild(t);
   }
+  return !cfg.require_auth;   // false = must log in before using the wizard
 }
-initAuth();
 
 let book = null, stats = null, level = 25;
 const LEVEL_INFO = [
@@ -485,5 +498,9 @@ $('goPdf').onclick = async () => {
   $('goPdf').disabled = false;
 };
 
-renderLevels(); renderPdfModes(); refreshKnown(); refreshBooks();
+(async () => {
+  renderLevels(); renderPdfModes();
+  const canUse = await initAuth();          // false = login required, not in
+  if (canUse){ refreshKnown(); refreshBooks(); }
+})();
 </script>

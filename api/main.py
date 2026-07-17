@@ -42,20 +42,24 @@ def health():
 
 @app.get("/me", tags=["auth"])
 def me(user: dict = Depends(get_current_user)):
-    """The authenticated user's profile, tier, and storage usage."""
+    """The authenticated user's profile, tier, storage, and daily quota."""
     from api.auth import public_user
+    from api import db, limits
     from core import pipeline
     used = pipeline.storage_used()
+    pages = db.usage_today(user["id"])
     return {"user": public_user(user),
             "storage": {"used": used, "limit": pipeline.STORAGE_LIMIT,
-                        "pct": round(used / pipeline.STORAGE_LIMIT * 100, 1)}}
+                        "pct": round(used / pipeline.STORAGE_LIMIT * 100, 1)},
+            "quota": {"pages_today": pages, "pages_limit": limits.DAILY_PAGES}}
 
 @app.get("/auth/config", tags=["auth"])
 def auth_config():
     """What the SPA needs to render the login buttons (both public)."""
-    from api.auth import GOOGLE_CLIENT_ID, TELEGRAM_BOT_USERNAME
+    from api.auth import GOOGLE_CLIENT_ID, TELEGRAM_BOT_USERNAME, REQUIRE_AUTH
     return {"google_client_id": GOOGLE_CLIENT_ID,
-            "telegram_bot": TELEGRAM_BOT_USERNAME}
+            "telegram_bot": TELEGRAM_BOT_USERNAME,
+            "require_auth": REQUIRE_AUTH}
 
 @app.post("/auth/telegram-widget", tags=["auth"])
 def auth_telegram_widget(body: dict):

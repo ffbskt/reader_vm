@@ -65,6 +65,7 @@ def _run(job):
                 cached += 1
             else:
                 api_calls += 1
+                db.add_usage(job["user_id"], 1)   # count toward daily quota
                 api_time += time.time() - t0
                 time.sleep(API_GAP_S)
         except QuotaError as e:

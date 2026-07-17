@@ -57,6 +57,12 @@ CREATE TABLE IF NOT EXISTS job_events(
   payload TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_events_job ON job_events(job_id);
+CREATE TABLE IF NOT EXISTS usage(
+  user_id INTEGER NOT NULL,
+  day TEXT NOT NULL,
+  pages INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(user_id, day)
+);
 """
 
 def get_db():
@@ -182,3 +188,24 @@ def active_job_for(book_slug, level, user_id):
             " AND status IN ('queued','running') LIMIT 1",
             (book_slug, level, user_id)).fetchone()
         return row["id"] if row else None
+
+def running_jobs_for_user(user_id):
+    with contextlib.closing(get_db()) as con, con:
+        return con.execute(
+            "SELECT COUNT(*) c FROM jobs WHERE user_id=? AND "
+            "status IN ('queued','running')", (user_id,)).fetchone()["c"]
+
+def usage_today(user_id):
+    day = time.strftime("%Y-%m-%d")
+    with contextlib.closing(get_db()) as con, con:
+        row = con.execute("SELECT pages FROM usage WHERE user_id=? AND day=?",
+                          (user_id, day)).fetchone()
+        return row["pages"] if row else 0
+
+def add_usage(user_id, pages):
+    day = time.strftime("%Y-%m-%d")
+    with contextlib.closing(get_db()) as con, con:
+        con.execute(
+            "INSERT INTO usage(user_id, day, pages) VALUES(?,?,?) "
+            "ON CONFLICT(user_id, day) DO UPDATE SET pages = pages + ?",
+            (user_id, day, pages, pages))
