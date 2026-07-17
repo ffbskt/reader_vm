@@ -120,7 +120,16 @@ Tunnel (no card), Hetzner €4 (PayPal).
       live: migration moved data to users/1/, owner keeps La Celestina,
       /me shows 1.1MB/100MB. PENDING USER: BotFather /setdomain
       readersimple.duckdns.org so the Telegram web button renders.
-      Quota on Gemini requests/pages (vs storage) still TODO if needed.
+- [x] 2b.2b PROTECTION 2026-07-16: REQUIRE_AUTH=1 live (anonymous /books
+      and /me -> 401; closed the "anonymous = owner user 1" hole). Daily
+      translation quota (limits.py DAILY_PAGES=100 non-cached pages/user/day,
+      counted in usage table by the worker), MAX_CONCURRENT_JOBS=1,
+      MAX_RANGE=200. /me returns quota; web app gates the wizard behind
+      login + shows storage/quota in the header chip. 41 tests.
+      **Check:** PASSED live — anon 401, authed owner sees library +
+      1.1MB/100MB + 0/100 pages, logged-out web shows "please sign in".
+      Build note: `docker compose up --build` OOMs the 1GB VM if run
+      attached — build detached (nohup) and it completes.
 - [x] 2b.3 2026-07-16: bot/bot.py — thin API client (long polling, no
       public port), bot container in compose. POST /auth/telegram (shared
       TELEGRAM_BOT_SECRET) maps tg_id -> user; OWNER_TG_ID claims user 1.
