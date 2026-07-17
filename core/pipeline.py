@@ -360,6 +360,86 @@ def simplify_book_page(slug, page, level, force=False):
         json.dump(result, f, ensure_ascii=False, indent=1)
     return result, False
 
+# baseline mode: no known vocabulary — Gemini simplifies to a CEFR-ish tier.
+# Used when a user skips step 1 (with a warning) and for research.
+BASELINE_LEVELS = {
+    0: "A1 (absolute beginner: very short sentences, only the most common "
+       "everyday words)",
+    25: "A2 (beginner: simple sentences, high-frequency vocabulary)",
+    50: "B1 (intermediate: natural but plain language, avoid rare/archaic "
+        "words)",
+    75: "B2 (upper-intermediate: keep most vocabulary, only replace rare, "
+        "archaic or very literary words)",
+}
+
+def simplify_page_baseline(slug, page, level, force=False):
+    """Returns (result, cached). Vocab-free simplification, cached apart
+    from the vocab-guided cache (page<N>_L<lvl>_base.json)."""
+    if level not in LEVELS:
+        raise ValueError(f"level must be one of {LEVELS}")
+    out = os.path.join(book_dir(slug), "simplified",
+                       f"page{page}_L{level}_base.json")
+    if os.path.exists(out) and not force:
+        return json.load(open(out, encoding="utf-8")), True
+    text = page_text(slug, page)
+    if len(counted_words(text)) < 20:
+        raise ValueError(f"page {page} has almost no text")
+    meta = json.load(open(os.path.join(book_dir(slug), "meta.json"),
+                          encoding="utf-8"))
+    key = read_api_key()
+    if not key:
+        raise RuntimeError("no API key")
+    prompt = f"""You are simplifying a page of '{meta['title']}' (may contain OCR errors)
+for a language learner. There is NO learner vocabulary list.
+
+TASK: rewrite each sentence in simple modern language at CEFR level
+{BASELINE_LEVELS[level]}. Preserve the meaning. Fix obvious OCR errors.
+
+ALSO build a vocabulary: list up to 40 words that remain in your simplified
+text and could still be difficult at that level, translated to English and
+Russian.
+
+This may be a PLAY: lines often start with a character name like 'CALIXTO.—'.
+Set "speaker" per sentence (uppercase, name kept OUT of the text); "" for
+narration/headings.
+
+Reply ONLY with JSON:
+{{"vocab": [{{"es": "word", "en": "translation", "ru": "перевод"}}],
+  "sentences": [{{"speaker": "X", "orig": "...", "simple": "..."}}]}}
+
+PAGE TEXT:
+{text}"""
+    import requests as _rq
+    err = None
+    for model in MODELS:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent?key={key}")
+        try:
+            r = _rq.post(url, json={"contents": [{"parts": [{"text": prompt}]}],
+                         "generationConfig": {"temperature": 0.2}}, timeout=180)
+            if r.status_code == 404:
+                continue
+            if r.status_code == 429:
+                raise QuotaError("429 on baseline call")
+            r.raise_for_status()
+            t = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            t = re.sub(r"^```(json)?|```$", "", t.strip(), flags=re.M).strip()
+            parsed = json.loads(t)
+            break
+        except QuotaError:
+            raise
+        except Exception as e:
+            err = str(e).replace(key, "***")
+    else:
+        raise RuntimeError(f"all models failed: {err}")
+    result = {"page": page, "method": "baseline", "level": level, "fmt": 2,
+              "model": model, "vocab": parsed.get("vocab", []),
+              "sentences": parsed.get("sentences", [])}
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, indent=1)
+    return result, False
+
 def _call_gemini_site(title, page_text_s, known, allowed, unknown):
     key = read_api_key()
     if not key:
