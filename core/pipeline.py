@@ -409,6 +409,73 @@ def book_stats(slug, sample_n=30):
 # --------------------------------------------------------------------------
 # leveled simplification (one Gemini request per page+level, cached)
 # --------------------------------------------------------------------------
+REFINE_TARGET = 15        # keep refining a page while more unknowns remain
+REFINE_MAX_PASSES = 2     # ... but never more than this many extra calls
+
+def _refine_pass(title, sentences, allowed_words):
+    """One 'puzzle' pass: rewrite so listed forbidden words disappear, WITHOUT
+    shortening (research exp1: unkT 36->20). Returns new sentences or the old
+    ones if the call fails/gets worse."""
+    allowed_f = set(allowed_words)
+    bad = sorted({fold(w) for s in sentences
+                  for w in counted_words(s.get("simple", "").lower())
+                  if fold(w) not in allowed_f})
+    if not bad:
+        return sentences
+    body = "\n".join((f"{s.get('speaker','')}| " if s.get("speaker") else "")
+                     + s.get("simple", "") for s in sentences)
+    prompt = (
+        f"PUZZLE: the text below (from '{title}') must use ONLY words from "
+        f"this vocabulary (any inflected form and proper names are fine):\n"
+        f"{' '.join(sorted(allowed_words))}\n\n"
+        f"These words BREAK the rule: {' '.join(bad)}\n"
+        f"Rewrite each line so every rule-breaking word is gone — replace it "
+        f"with vocabulary words, or explain the idea with several simple "
+        f"vocabulary words. Keep ALL the meaning; do NOT shorten or drop "
+        f"content. Reply ONLY with JSON: "
+        f'{{"sentences": [{{"speaker": "X or empty", "simple": "sentence"}}]}}'
+        f"\n\nTEXT (speaker| sentence):\n{body}")
+    try:
+        parsed, _ = call_gemini_raw(prompt)
+        new = parsed.get("sentences")
+        if new and isinstance(new, list):
+            def unk(ss):
+                return len({fold(w) for s in ss
+                            for w in counted_words(s.get("simple", "").lower())
+                            if fold(w) not in allowed_f})
+            if unk(new) < unk(sentences):        # only accept improvements
+                return new
+    except Exception:
+        pass
+    return sentences
+
+def call_gemini_raw(prompt):
+    """Minimal JSON call used by refine/baseline. Returns (parsed, model)."""
+    key = read_api_key()
+    if not key:
+        raise RuntimeError("no API key")
+    import requests as _rq
+    err = None
+    for model in MODELS:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent?key={key}")
+        try:
+            r = _rq.post(url, json={"contents": [{"parts": [{"text": prompt}]}],
+                         "generationConfig": {"temperature": 0.2}}, timeout=180)
+            if r.status_code == 404:
+                continue
+            if r.status_code == 429:
+                raise QuotaError("429 on refine call")
+            r.raise_for_status()
+            t = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            t = re.sub(r"^```(json)?|```$", "", t.strip(), flags=re.M).strip()
+            return json.loads(t), model
+        except QuotaError:
+            raise
+        except Exception as e:
+            err = str(e).replace(key, "***")
+    raise RuntimeError(f"all models failed: {err}")
+
 def simplify_book_page(slug, page, level, force=False):
     """Returns (result, cached). Cached combination = NO API request."""
     if level not in LEVELS:
@@ -442,6 +509,26 @@ def simplify_book_page(slug, page, level, force=False):
                                       page_allowed, page_unknown)
     sentences = parsed.get("sentences", [])
     vocab = parsed.get("vocab", [])
+
+    # 2c.4: at the strictest level, iteratively "puzzle-refine" to drive
+    # remaining unknown words down toward REFINE_TARGET (extra calls, but
+    # only where it matters). allowed = known vocab + this level's allowed +
+    # names (names are always fine in the text).
+    if level == 0:
+        allow_words = ({w for w in known} | set(allowed)
+                       | {n for n in names})
+        known_f0 = {fold(w) for w in known} | names
+        for _ in range(REFINE_MAX_PASSES):
+            ut = len({fold(w) for s in sentences
+                      for w in counted_words(s.get("simple", "").lower())
+                      if fold(w) not in known_f0})
+            if ut <= REFINE_TARGET:
+                break
+            new = _refine_pass(meta["title"], sentences, allow_words)
+            if new is sentences:
+                break
+            sentences = new
+            time.sleep(API_GAP_S)
 
     # score vs the learner's KNOWN set (allowed words still count as unknown
     # to the learner — they must appear in the vocab/hover translations)
