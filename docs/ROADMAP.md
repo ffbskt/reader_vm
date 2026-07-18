@@ -154,6 +154,40 @@ Tunnel (no card), Hetzner €4 (PayPal).
       **Check:** change a UI string, `git push`, tag -> live on VM with no
       manual SSH.
 
+## Phase 2c — shared library + puzzle translation (research-driven redesign)
+
+Decisions from research (research_baseline.py, research_reduce.py, 2026-07):
+level-25/50 vocab gap is only ~1.6 pp -> translations are SHARED per
+(book_hash, level); personalization = per-user word marking at read time;
+level-0 quality path = guided translate + iterative "puzzle" refine pass
+(unkT 36 -> 20 in one pass; target ~10 with two).
+
+- [ ] 2c.1 Fix known-vocab English pollution: site add_known_source must
+      language-filter like analyze.classify_language ("beautiful", "am"
+      leaked in). Rebuild easy_spanish source; rescore cached pages.
+      **Check:** no EN words in known list; coverage numbers shift honestly.
+- [ ] 2c.2 Content-addressed shared library: data/library/<text_hash>/
+      {book.txt, page<N>_L<lvl>.json, word_dict.json}; page-level hashes
+      for partial dedup across editions. DB: documents(hash,...),
+      user_documents(user_id, doc_hash, name, added_at, pages_read).
+      Migrate users/<uid>/books/. User quota = their references.
+      **Check:** two accounts upload the same TXT -> one stored copy,
+      second user instantly sees existing translations; different
+      edition with matching pages reuses those pages' translations.
+- [ ] 2c.3 Vocab similarity ("flexible book1"): store vocab_hash + word
+      set per user; when Jaccard(user_vocab, cache_vocab) >= threshold
+      (start 0.8), serve the shared translation and mark unknown words
+      per-user at read time; below threshold offer personal translation.
+      **Check:** synthetic vocab 90% overlapping -> shared cache served,
+      hover marks differ per user.
+- [ ] 2c.4 Puzzle refine in the pipeline: level-0 jobs run translate +
+      refine pass automatically (2 calls/page, "do not shorten" guard);
+      second refine only if unkT still > ~15. Baseline (no-vocab) mode
+      exposed in UI as "skip step 1" with warning.
+      **Check:** pages 41-43 L0 rerun -> unkT <= ~12, length within 10%.
+- [ ] 2c.5 Update ARCHITECTURE.md sections 3/5 to the shared-library
+      model (documents/user_documents, reference-based quota).
+
 ## Phase 3 — payments
 
 - [ ] 3.1 Stripe account, Checkout for Plus, webhook -> tier (test mode).
