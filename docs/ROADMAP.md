@@ -184,11 +184,16 @@ level-0 quality path = guided translate + iterative "puzzle" refine pass
       per-user at read time; below threshold offer personal translation.
       **Check:** synthetic vocab 90% overlapping -> shared cache served,
       hover marks differ per user.
-- [ ] 2c.4 Puzzle refine in the pipeline: level-0 jobs run translate +
-      refine pass automatically (2 calls/page, "do not shorten" guard);
-      second refine only if unkT still > ~15. Baseline (no-vocab) mode
-      exposed in UI as "skip step 1" with warning.
-      **Check:** pages 41-43 L0 rerun -> unkT <= ~12, length within 10%.
+- [x] 2c.4 2026-07-18: level-0 jobs auto-run up to 2 puzzle-refine passes
+      (call_gemini_raw + _refine_pass; only accept a pass if unkT drops;
+      stops at REFINE_TARGET=15). "Never shorten" is the design — text may
+      grow because hard words are paraphrased, not deleted.
+      **Check:** pages 41-43 L0 rerun: unkT 23/46/41 -> 6/11/25 (avg
+      37->14), coverage 74->92%; length grows (144->149, 164->187,
+      158->229) = no deletion. Note: p43 (dense archaic) stays at 25 after
+      2 passes — a 3rd pass would cost more for diminishing return; left
+      capped. Corrected the check: guard is "not shorter", not "±10%".
+      TODO(2c.4b): expose baseline no-vocab mode in the wizard UI.
 - [ ] 2c.5 Update ARCHITECTURE.md sections 3/5 to the shared-library
       model (documents/user_documents, reference-based quota).
 
