@@ -265,7 +265,9 @@ def list_books():
             item = {"slug": slug, "title": ref.get("title", m.get("title", slug)),
                     "pages": m.get("pages", 0),
                     "done_pages": {lv: len(cached_pages(slug, lv))
-                                   for lv in LEVELS}}
+                                   for lv in LEVELS},
+                    "done_base": {lv: len(cached_pages(slug, lv, True))
+                                  for lv in LEVELS}}
             sd = os.path.join(lib, "simplified")
             times = [os.path.getmtime(os.path.join(sd, f))
                      for f in os.listdir(sd)] if os.path.isdir(sd) else []
@@ -326,16 +328,20 @@ def page_text(slug, n):
              if l.strip() and not re.fullmatch(r"\d+", l.strip())]
     return re.sub(r"\s+", " ", " ".join(lines)).strip()
 
-def cache_file(slug, page, level):
+# guided cache = page<N>_L<lvl>.json ; baseline (vocab-free) = ..._base.json.
+# baseline results are universal (no user's vocabulary) -> always shareable.
+def cache_file(slug, page, level, baseline=False):
+    suf = "_base" if baseline else ""
     return os.path.join(book_dir(slug), "simplified",
-                        f"page{page}_L{level}.json")
+                        f"page{page}_L{level}{suf}.json")
 
-def cached_pages(slug, level):
+def cached_pages(slug, level, baseline=False):
     sd = os.path.join(book_dir(slug), "simplified")
+    suf = "_base" if baseline else ""
     out = []
     if os.path.isdir(sd):
         for fn in os.listdir(sd):
-            m = re.fullmatch(rf"page(\d+)_L{level}\.json", fn)
+            m = re.fullmatch(rf"page(\d+)_L{level}{suf}\.json", fn)
             if m:
                 out.append(int(m.group(1)))
     return sorted(out)
@@ -872,15 +878,14 @@ def fill_missing_translations(slug):
 # --------------------------------------------------------------------------
 # reader payload: simplified pages + merged hover dictionary
 # --------------------------------------------------------------------------
-def reader_payload(slug, level):
+def reader_payload(slug, level, baseline=False):
     from core.vocab import load_dictionary
-    import glob as _glob
     slug = _slug(slug)
     meta = json.load(open(os.path.join(book_dir(slug), "meta.json"),
                           encoding="utf-8"))
     results = []
-    for p in cached_pages(slug, level):
-        results.append(json.load(open(cache_file(slug, p, level),
+    for p in cached_pages(slug, level, baseline):
+        results.append(json.load(open(cache_file(slug, p, level, baseline),
                                       encoding="utf-8")))
     # hover dictionary: vocab from EVERY cached page at EVERY level of this
     # book + the book's gap-fill word_dict, so translations collected once

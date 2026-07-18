@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS jobs(
   current_page INTEGER,
   eta_s INTEGER,
   error TEXT,
+  baseline INTEGER NOT NULL DEFAULT 0,
   created_at REAL NOT NULL,
   started_at REAL,
   finished_at REAL
@@ -74,16 +75,24 @@ def get_db():
     con.execute("PRAGMA busy_timeout=30000")
     if path not in _initialized:
         con.executescript(SCHEMA)
+        # additive migrations for DBs created before a column existed
+        for col, ddl in [("baseline",
+                          "ALTER TABLE jobs ADD COLUMN baseline "
+                          "INTEGER NOT NULL DEFAULT 0")]:
+            try:
+                con.execute(ddl)
+            except sqlite3.OperationalError:
+                pass                 # already present
         _initialized.add(path)
     return con
 
-def create_job(user_id, book_slug, level, page_from, page_to):
+def create_job(user_id, book_slug, level, page_from, page_to, baseline=False):
     with contextlib.closing(get_db()) as con, con:
         cur = con.execute(
             "INSERT INTO jobs(user_id, book_slug, level, page_from, page_to,"
-            " total, created_at) VALUES(?,?,?,?,?,?,?)",
+            " total, baseline, created_at) VALUES(?,?,?,?,?,?,?,?)",
             (user_id, book_slug, level, page_from, page_to,
-             page_to - page_from + 1, time.time()))
+             page_to - page_from + 1, 1 if baseline else 0, time.time()))
         return cur.lastrowid
 
 def claim_next_job():

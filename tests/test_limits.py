@@ -27,8 +27,8 @@ def test_daily_page_quota_blocks(monkeypatch):
     monkeypatch.setattr(limits, "DAILY_PAGES", 1)
     slug = make_book()
     db.add_usage(1, 1)                      # already used today's 1 page
-    r = client.post(f"/books/{slug}/translate",
-                    json={"level": 0, "from": 1, "to": 2})
+    r = client.post(f"/books/{slug}/translate",   # baseline: no vocab needed
+                    json={"level": 0, "from": 1, "to": 2, "baseline": True})
     assert r.status_code == 429
     assert "daily translation limit" in r.json()["detail"].lower()
 

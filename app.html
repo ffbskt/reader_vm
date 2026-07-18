@@ -158,6 +158,10 @@ difficulty you choose.</p>
   <h2><span class="no">4</span>Translate</h2>
   <p class="hint">Pick a page range and start. Pages are sent to the Gemini
   API one by one (free tier, cached pages are skipped for free).</p>
+  <label style="display:block;margin:0 0 10px;font-size:.9rem">
+    <input type="checkbox" id="baseline"> Generic simplification
+    <span style="color:var(--muted)">— no vocabulary, Gemini simplifies to a
+    plain reading level. Use if you skipped step 1.</span></label>
   page from <input type="number" id="pFrom" min="1" value="1">
   to <input type="number" id="pTo" min="1" value="1">
   <button class="btn" id="goTr">Translate</button>
@@ -404,12 +408,14 @@ function renderLevels(){
 }
 // ---- step 4: translate job ----
 let poll = null;
+const isBase = () => $('baseline').checked;
+$('baseline').onchange = () => { renderLevels(); updateReadPdf(); };
 $('goTr').onclick = async () => {
   $('jerr').textContent = '';
   const d = await api(`/books/${book}/translate`, {method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({level, from: +$('pFrom').value,
-                          to: +$('pTo').value})});
+                          to: +$('pTo').value, baseline: isBase()})});
   if (d.error) return $('jerr').textContent = d.error;
   trackJob();
 };
@@ -441,15 +447,16 @@ async function updateReadPdf(){
   if (!book) return;
   const d = await api('/books');
   const b = d.books.find(x => x.slug === book);
-  const dp = b ? b.done_pages : {};
+  const dp = (b && (isBase() ? b.done_base : b.done_pages)) || {};
+  const bq = isBase() ? '&baseline=1' : '';
   const n = dp[level] || 0;
-  $('readLink').href = `reader_site.html?book=${book}&level=${level}`;
+  $('readLink').href = `reader_site.html?book=${book}&level=${level}${bq}`;
   const shelves = [0, 25, 50, 75].filter(l => dp[l]).map(l =>
-    `<a href="reader_site.html?book=${book}&level=${l}"
+    `<a href="reader_site.html?book=${book}&level=${l}${bq}"
         ${l === level ? 'style="font-weight:700"' : ''}>level ${l} ·
         ${dp[l]} p.</a>`).join(' &nbsp;·&nbsp; ');
   $('readInfo').innerHTML = shelves ?
-    ` translated so far: ${shelves}` :
+    ` translated so far${isBase() ? ' (generic)' : ''}: ${shelves}` :
     ' no pages translated yet — run step 4';
   if (!n && !shelves) { $('s5').classList.add('dis'); $('s6').classList.add('dis'); }
   else { $('s5').classList.remove('dis'); $('s6').classList.toggle('dis', !n); }
@@ -480,7 +487,8 @@ $('goPdf').onclick = async () => {
       `building ${n} pages… ~${est}s expected · ${Math.round(s)}s elapsed`;
   }, 250);
   try {
-    const r = await fetch(`/books/${book}/pdf?level=${level}&mode=${pdfMode}`,
+    const r = await fetch(`/books/${book}/pdf?level=${level}&mode=${pdfMode}`
+                          + (isBase() ? '&baseline=1' : ''),
                           {headers: authHeaders()});
     if (!r.ok){ const d = await r.json(); throw new Error(d.detail || d.error || r.status); }
     const blob = await r.blob();

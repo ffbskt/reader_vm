@@ -11,7 +11,7 @@ import threading, time
 from api import db
 from core import pipeline
 from core.pipeline import (API_GAP_S, QuotaError, fill_missing_translations,
-                           simplify_book_page)
+                           simplify_book_page, simplify_page_baseline)
 
 _wake = threading.Event()
 _started = False
@@ -48,6 +48,7 @@ def _loop():
 
 def _run(job):
     jid, slug, level = job["id"], job["book_slug"], job["level"]
+    baseline = bool(job["baseline"])
     pipeline.set_user(job["user_id"])       # scope library paths to the owner
     done = cached = api_calls = 0
     api_time = 0.0
@@ -59,7 +60,10 @@ def _run(job):
         ok = False
         try:
             t0 = time.time()
-            _, was_cached = simplify_book_page(slug, page, level)
+            if baseline:
+                _, was_cached = simplify_page_baseline(slug, page, level)
+            else:
+                _, was_cached = simplify_book_page(slug, page, level)
             ok = True
             if was_cached:
                 cached += 1

@@ -64,6 +64,23 @@ def test_duplicate_active_job_409():
     if a.status_code == 202:
         wait_done(a.json()["id"])
 
+def test_baseline_job_routes_to_baseline_cache(monkeypatch):
+    slug = make_book_with_cache(pages=())         # no guided cache
+    # pre-seed a BASELINE cache page so the job runs free
+    fp = pipeline.cache_file(slug, 1, 0, baseline=True)
+    os.makedirs(os.path.dirname(fp), exist_ok=True)
+    import json as _j
+    _j.dump({**CACHED_PAGE, "method": "baseline"},
+            open(fp, "w", encoding="utf-8"))
+    r = client.post(f"/books/{slug}/translate",
+                    json={"level": 0, "from": 1, "to": 1, "baseline": True})
+    assert r.status_code == 202
+    job = wait_done(r.json()["id"])
+    assert job["status"] == "done" and job["cached"] == 1
+    # reader in baseline mode sees it
+    rd = client.get(f"/books/{slug}/reader?level=0&baseline=1").json()
+    assert len(rd["pages"]) == 1
+
 def test_latest_job_and_validation():
     slug = make_book_with_cache()
     assert client.post(f"/books/{slug}/translate",

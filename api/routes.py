@@ -98,6 +98,7 @@ class TranslateReq(BaseModel):
     level: int
     page_from: int = Field(alias="from")
     page_to: int = Field(alias="to")
+    baseline: bool = False        # True = generic CEFR simplify, no vocabulary
 
 @router.post("/books/{slug}/translate", tags=["jobs"], status_code=202)
 def translate(slug: str, req: TranslateReq,
@@ -124,8 +125,11 @@ def translate(slug: str, req: TranslateReq,
         raise HTTPException(429, "you already have a translation running — "
                                  "wait for it to finish")
     # only pages not already cached will cost a Gemini call and count to quota
-    cached = set(pipeline.cached_pages(slug, req.level))
+    cached = set(pipeline.cached_pages(slug, req.level, req.baseline))
     new_pages = [p for p in range(p_from, p_to + 1) if p not in cached]
+    if new_pages and not req.baseline and not pipeline.known_set():
+        raise HTTPException(400, "no known vocabulary yet — add one in step 1, "
+                                 "or tick 'generic simplification'")
     used = db.usage_today(user["id"])
     if used + len(new_pages) > limits.DAILY_PAGES:
         left = max(0, limits.DAILY_PAGES - used)
@@ -133,7 +137,8 @@ def translate(slug: str, req: TranslateReq,
             f"daily translation limit reached ({limits.DAILY_PAGES} new "
             f"pages/day). {left} left today; {len(new_pages)} needed. "
             "Cached pages are always free.")
-    job_id = db.create_job(user["id"], slug, req.level, p_from, p_to)
+    job_id = db.create_job(user["id"], slug, req.level, p_from, p_to,
+                           req.baseline)
     worker.wake()
     return db.get_job(job_id)
 
@@ -155,34 +160,36 @@ def latest_job(book: str = Query(...),
 # ---------------- reader + PDF ----------------
 
 @router.get("/books/{slug}/reader", tags=["reader"])
-def reader_data(slug: str, level: int = 0,
+def reader_data(slug: str, level: int = 0, baseline: bool = False,
                 user: dict = Depends(get_current_user)):
     """Simplified pages at one level + the merged hover dictionary."""
     try:
-        return pipeline.reader_payload(slug, level)
+        return pipeline.reader_payload(slug, level, baseline)
     except FileNotFoundError:
         raise HTTPException(404, f"book {slug!r} not found")
 
 @router.get("/books/{slug}/pdf", tags=["reader"])
 def build_pdf(slug: str, level: int = 0, mode: str = "repeat",
+              baseline: bool = False,
               user: dict = Depends(get_current_user)):
     """Learner PDF from the translated pages, in one of the 4 vocabulary
     modes. Pure local work — no API calls."""
     if mode not in MODES:
         raise HTTPException(400, f"mode must be one of {list(MODES)}")
-    done = pipeline.cached_pages(slug, level)
+    done = pipeline.cached_pages(slug, level, baseline)
     if not done:
         raise HTTPException(400, "no translated pages at this level yet")
     bdir = pipeline.book_dir(slug)
     meta = json.load(open(os.path.join(bdir, "meta.json"), encoding="utf-8"))
+    suf = "_base" if baseline else ""
     # PDF depends only on (content, level, mode) -> shareable name in the lib
-    out = os.path.join(bdir, f"pdf_L{level}_{mode}.pdf")
+    out = os.path.join(bdir, f"pdf_L{level}{suf}_{mode}.pdf")
     r = subprocess.run(
         [sys.executable, os.path.join(ROOT, "build_pdf.py"),
          "--from", str(done[0]), "--to", str(done[-1]),
          "--mode", mode, "--out", out,
          "--dir", os.path.join(bdir, "simplified"),
-         "--pattern", f"page{{n}}_L{level}.json",
+         "--pattern", f"page{{n}}_L{level}{suf}.json",
          "--title", meta["title"], "--author", "",
          "--known-note", "al vocabulario del estudiante"],
         capture_output=True, text=True, encoding="utf-8",

@@ -174,19 +174,21 @@ const authHeaders = () => localStorage.getItem('jwt') ?
 (async () => {
   const book = qs.get('book');
   const level = qs.get('level') || 0;
+  const base = qs.get('baseline') ? 1 : 0;
+  const bq = base ? '&baseline=1' : '';
   // level switcher: every level of THIS book with its translated-page count,
   // so a level mix-up is visible instead of looking like lost pages
   const bl = await fetch('/books', {headers: authHeaders()})
     .then(r => r.json());
   const b = (bl.books || []).find(x => x.slug === book);
-  const dp = b ? b.done_pages : {};
+  const dp = (b && (base ? b.done_base : b.done_pages)) || {};
   document.getElementById('lv').innerHTML = [0, 25, 50, 75].map(l =>
     `<option value="${l}" ${+level === l ? 'selected' : ''}>
-     level ${l} · ${dp[l] || 0} p.</option>`).join('');
+     level ${l}${base ? ' (generic)' : ''} · ${dp[l] || 0} p.</option>`).join('');
   document.getElementById('lv').onchange = e =>
-    location.href = `reader_site.html?book=${book}&level=${e.target.value}`;
+    location.href = `reader_site.html?book=${book}&level=${e.target.value}${bq}`;
 
-  const r = await fetch(`/books/${book}/reader?level=${level}`,
+  const r = await fetch(`/books/${book}/reader?level=${level}${bq}`,
                         {headers: authHeaders()});
   data = await r.json();
   document.getElementById('title').textContent = data.title || 'Reader';
@@ -195,7 +197,7 @@ const authHeaders = () => localStorage.getItem('jwt') ?
     document.getElementById('view').innerHTML =
       `<div class="empty">No translated pages at level ${level} yet.` +
       (other.length ? ` This book has pages at: ${other.map(l =>
-        `<a href="reader_site.html?book=${book}&level=${l}">level ${l}
+        `<a href="reader_site.html?book=${book}&level=${l}${bq}">level ${l}
          (${dp[l]} p.)</a>`).join(', ')}.` :
        ' Run step 4 in the builder.') + '</div>';
     return;
