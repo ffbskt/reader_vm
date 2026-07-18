@@ -162,18 +162,22 @@ level-25/50 vocab gap is only ~1.6 pp -> translations are SHARED per
 level-0 quality path = guided translate + iterative "puzzle" refine pass
 (unkT 36 -> 20 in one pass; target ~10 with two).
 
-- [ ] 2c.1 Fix known-vocab English pollution: site add_known_source must
-      language-filter like analyze.classify_language ("beautiful", "am"
-      leaked in). Rebuild easy_spanish source; rescore cached pages.
-      **Check:** no EN words in known list; coverage numbers shift honestly.
-- [ ] 2c.2 Content-addressed shared library: data/library/<text_hash>/
-      {book.txt, page<N>_L<lvl>.json, word_dict.json}; page-level hashes
-      for partial dedup across editions. DB: documents(hash,...),
-      user_documents(user_id, doc_hash, name, added_at, pages_read).
-      Migrate users/<uid>/books/. User quota = their references.
-      **Check:** two accounts upload the same TXT -> one stored copy,
-      second user instantly sees existing translations; different
-      edition with matching pages reuses those pages' translations.
+- [x] 2c.1 2026-07-18: add_known_source language-filters via
+      classify_language; fix_vocab.py cleaned stored sources (easy_spanish
+      1727 -> 1393, -334 EN) and rescored cached pages, on dev + VM.
+      **Check:** PASSED — beautiful/the gone, casa/perro kept; coverage
+      58.6% (was 59, honest drop); 41 tests green.
+- [x] 2c.2 2026-07-18: content-addressed shared library —
+      SITE/library/<text_hash>/{book.txt,meta,simplified,word_dict};
+      users/<uid>/books/<slug>/ref.json = ownership record. book_dir(slug)
+      resolves via ref -> library (single choke point). Dedup by
+      normalized-text sha256. storage_used counts referenced content.
+      Migration at startup (idempotent), ran on dev + VM.
+      **Check:** PASSED — 43 tests incl. two users same text -> 1 library
+      copy + 2nd sees existing translations; different text not deduped.
+      VM: owner keeps La Celestina (15/10/5), 1.04 MB.
+      NOTE: page-level partial-edition dedup deferred to 2c.2b (whole-book
+      hash shipped; partial needs per-page-hash cache keys).
 - [ ] 2c.3 Vocab similarity ("flexible book1"): store vocab_hash + word
       set per user; when Jaccard(user_vocab, cache_vocab) >= threshold
       (start 0.8), serve the shared translation and mark unknown words
