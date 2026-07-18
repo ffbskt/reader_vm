@@ -193,7 +193,16 @@ level-0 quality path = guided translate + iterative "puzzle" refine pass
       158->229) = no deletion. Note: p43 (dense archaic) stays at 25 after
       2 passes — a 3rd pass would cost more for diminishing return; left
       capped. Corrected the check: guard is "not shorter", not "±10%".
-      TODO(2c.4b): expose baseline no-vocab mode in the wizard UI.
+- [x] 2c.4b 2026-07-18: baseline (no-vocab CEFR) mode exposed end-to-end.
+      jobs.baseline column (+ idempotent ALTER migration); translate/
+      reader/pdf take a baseline flag; cache namespaced page<N>_L<lvl>_base
+      (universal, always shareable); worker branches to
+      simplify_page_baseline; list_books reports done_base; wizard has a
+      "generic simplification" checkbox that repoints level cards, reader
+      link and PDF. Vocab requirement only enforced when uncached pages
+      actually need it.
+      **Check:** PASSED — 44 tests; live on VM: baseline job on p60 ->
+      method "baseline", separate done_base:{0:1}, guided 15/10/5 intact.
 - [ ] 2c.5 Update ARCHITECTURE.md sections 3/5 to the shared-library
       model (documents/user_documents, reference-based quota).
 
