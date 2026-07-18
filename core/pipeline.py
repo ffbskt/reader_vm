@@ -30,7 +30,7 @@ import sys
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from analyze import (fold, counted_words, tokenize, clean_ocr, proper_nouns,
-                     read_api_key, load_pages)
+                     read_api_key, load_pages, classify_language)
 from simplify_page import MODELS, QuotaError
 
 import contextvars
@@ -134,9 +134,14 @@ def add_known_source(filename, blob):
         words = sorted({fold(w) for line in text.splitlines()
                         for w in tokenize(line.split("#")[0]) if len(w) > 1})
     else:
-        # a book the user has read: words seen at least twice count as known
+        # a book the user has read: words seen at least twice count as known.
+        # Bilingual textbooks leak English ("beautiful", "am") — language-
+        # filter each word, with the text's own accented words as evidence.
         counts = Counter(counted_words(clean_ocr(text)))
-        words = sorted({fold(w) for w, c in counts.items() if c >= 2})
+        evidence = frozenset(fold(w) for w in counts
+                             if any(c in "áéíóúñü" for c in w))
+        words = sorted({fold(w) for w, c in counts.items() if c >= 2
+                        and classify_language(w, evidence) == "es"})
     src = {"name": os.path.basename(filename), "slug": slug, "kind": kind,
            "count": len(words), "words": words}
     with open(os.path.join(known_dir(), slug + ".json"), "w",
