@@ -20,7 +20,7 @@ Layout under data/site/:
 Cost policy (CLAUDE.md): translation runs ONLY when the user starts a job
 from the site; cached pages are returned with no API request.
 """
-import io, os, re, json, time, random, threading
+import io, os, re, json, time, random, threading, hashlib, shutil
 from collections import Counter
 
 # repo root = parent of core/; legacy engine modules (analyze, simplify_page)
@@ -58,16 +58,33 @@ def known_dir():
 def books_dir():
     return os.path.join(user_root(), "books")
 
-def storage_used(uid=None):
-    """Total bytes in a user's library (known sources + books + caches)."""
-    root = user_root(uid)
+def _dir_size(path):
     total = 0
-    for dp, _, files in os.walk(root):
+    for dp, _, files in os.walk(path):
         for f in files:
             try:
                 total += os.path.getsize(os.path.join(dp, f))
             except OSError:
                 pass
+    return total
+
+def storage_used(uid=None):
+    """A user's footprint: their known sources + the shared-library content
+    they reference (each referenced book counted once)."""
+    root = user_root(uid)
+    total = _dir_size(os.path.join(root, "known"))
+    seen = set()
+    bd = os.path.join(root, "books")
+    if os.path.isdir(bd):
+        for slug in os.listdir(bd):
+            rp = os.path.join(bd, slug, "ref.json")
+            if os.path.exists(rp):
+                h = json.load(open(rp, encoding="utf-8"))["hash"]
+                if h not in seen:
+                    seen.add(h)
+                    total += _dir_size(os.path.join(library_root(), h))
+            else:
+                total += _dir_size(os.path.join(bd, slug))   # legacy
     return total
 
 def migrate_legacy_to_user1():
@@ -177,40 +194,125 @@ def known_set():
     return words
 
 # --------------------------------------------------------------------------
-# target books
+# target books — content-addressed SHARED library (2c.2)
+#   library/<hash>/{book.txt, meta.json, simplified/, word_dict.json}  shared
+#   users/<uid>/books/<slug>/ref.json = ownership record {hash, name, ...}
+# Same text uploaded by two users => one stored copy, translations reused.
 # --------------------------------------------------------------------------
+def library_root():
+    return os.path.join(SITE, "library")
+
+def _text_hash(text):
+    """Stable id of a book's content: page markers dropped, whitespace and
+    case normalized, so re-uploads / minor reformatting dedupe."""
+    norm = re.sub(r"<<<PAGE \d+>>>", " ", text)
+    norm = re.sub(r"\s+", " ", norm).strip().lower()
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]
+
+def _ref_path(slug):
+    return os.path.join(books_dir(), _slug(slug), "ref.json")
+
+def _read_ref(slug):
+    fp = _ref_path(slug)
+    return json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else None
+
+def book_dir(slug):
+    """Physical dir of a book's shared content for the current user."""
+    ref = _read_ref(slug)
+    if ref:
+        return os.path.join(library_root(), ref["hash"])
+    return os.path.join(books_dir(), _slug(slug))   # legacy (pre-migration)
+
 def add_book(filename, blob):
     slug = _slug(filename)
-    bdir = os.path.join(books_dir(), slug)
-    os.makedirs(os.path.join(bdir, "simplified"), exist_ok=True)
     text = _read_upload_text(filename, blob)
-    with open(os.path.join(bdir, "book.txt"), "w", encoding="utf-8") as f:
-        f.write(text)
-    pages = load_pages(os.path.join(bdir, "book.txt"))
+    h = _text_hash(text)
+    lib = os.path.join(library_root(), h)
+    reused = os.path.exists(os.path.join(lib, "book.txt"))
+    os.makedirs(os.path.join(lib, "simplified"), exist_ok=True)
     title = os.path.splitext(os.path.basename(filename))[0]
-    meta = {"slug": slug, "title": title, "pages": max(pages) if pages else 0}
-    with open(os.path.join(bdir, "meta.json"), "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False)
-    return meta
+    if not reused:
+        with open(os.path.join(lib, "book.txt"), "w", encoding="utf-8") as f:
+            f.write(text)
+        pages = load_pages(os.path.join(lib, "book.txt"))
+        json.dump({"hash": h, "title": title,
+                   "pages": max(pages) if pages else 0},
+                  open(os.path.join(lib, "meta.json"), "w", encoding="utf-8"),
+                  ensure_ascii=False)
+    meta = json.load(open(os.path.join(lib, "meta.json"), encoding="utf-8"))
+    # per-user ownership reference
+    os.makedirs(os.path.join(books_dir(), slug), exist_ok=True)
+    json.dump({"hash": h, "slug": slug, "title": meta["title"],
+               "name": os.path.basename(filename), "added_at": time.time(),
+               "pages_read": 0},
+              open(_ref_path(slug), "w", encoding="utf-8"), ensure_ascii=False)
+    done = {lv: len(cached_pages(slug, lv)) for lv in LEVELS}
+    return {"slug": slug, "title": meta["title"], "pages": meta["pages"],
+            "reused": reused, "existing_translations": sum(done.values()),
+            "done_pages": done}
 
 def list_books():
     out = []
-    if os.path.isdir(books_dir()):
-        for slug in sorted(os.listdir(books_dir())):
-            mp = os.path.join(books_dir(), slug, "meta.json")
-            if os.path.exists(mp):
-                m = json.load(open(mp, encoding="utf-8"))
-                m["done_pages"] = {
-                    lv: len(cached_pages(slug, lv)) for lv in LEVELS}
-                sd = os.path.join(books_dir(), slug, "simplified")
-                times = [os.path.getmtime(os.path.join(sd, f))
-                         for f in os.listdir(sd)] if os.path.isdir(sd) else []
-                m["updated"] = max(times) if times else os.path.getmtime(mp)
-                out.append(m)
+    bd = books_dir()
+    if os.path.isdir(bd):
+        for slug in sorted(os.listdir(bd)):
+            lib = book_dir(slug)
+            mp = os.path.join(lib, "meta.json")
+            if not os.path.exists(mp):
+                continue
+            ref = _read_ref(slug) or {}
+            m = json.load(open(mp, encoding="utf-8"))
+            item = {"slug": slug, "title": ref.get("title", m.get("title", slug)),
+                    "pages": m.get("pages", 0),
+                    "done_pages": {lv: len(cached_pages(slug, lv))
+                                   for lv in LEVELS}}
+            sd = os.path.join(lib, "simplified")
+            times = [os.path.getmtime(os.path.join(sd, f))
+                     for f in os.listdir(sd)] if os.path.isdir(sd) else []
+            item["updated"] = max(times) if times else os.path.getmtime(mp)
+            out.append(item)
     return out
 
-def book_dir(slug):
-    return os.path.join(books_dir(), _slug(slug))
+def migrate_books_to_library():
+    """One-time: move each user's per-book content into the shared library
+    and leave a ref.json behind. Idempotent (skips dirs that already have a
+    ref, or no book.txt)."""
+    users = os.path.join(SITE, "users")
+    if not os.path.isdir(users):
+        return
+    for uid in os.listdir(users):
+        bd = os.path.join(users, uid, "books")
+        if not os.path.isdir(bd):
+            continue
+        for slug in os.listdir(bd):
+            d = os.path.join(bd, slug)
+            if os.path.exists(os.path.join(d, "ref.json")) \
+                    or not os.path.exists(os.path.join(d, "book.txt")):
+                continue
+            text = open(os.path.join(d, "book.txt"), encoding="utf-8").read()
+            h = _text_hash(text)
+            lib = os.path.join(library_root(), h)
+            old_meta = {}
+            mp = os.path.join(d, "meta.json")
+            if os.path.exists(mp):
+                old_meta = json.load(open(mp, encoding="utf-8"))
+            title = old_meta.get("title", slug)
+            if os.path.isdir(lib):
+                shutil.rmtree(d)                 # library already has it
+            else:
+                os.makedirs(library_root(), exist_ok=True)
+                shutil.move(d, lib)
+            os.makedirs(d, exist_ok=True)
+            pages = load_pages(os.path.join(lib, "book.txt"))
+            json.dump({"hash": h, "title": title,
+                       "pages": max(pages) if pages else 0},
+                      open(os.path.join(lib, "meta.json"), "w",
+                           encoding="utf-8"), ensure_ascii=False)
+            json.dump({"hash": h, "slug": slug, "title": title,
+                       "name": slug, "added_at": time.time(),
+                       "pages_read": 0},
+                      open(os.path.join(d, "ref.json"), "w",
+                           encoding="utf-8"), ensure_ascii=False)
 
 def book_pages(slug):
     return load_pages(os.path.join(book_dir(slug), "book.txt"))

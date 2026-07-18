@@ -32,6 +32,7 @@ app = FastAPI(
 def start_worker():
     from core import pipeline
     pipeline.migrate_legacy_to_user1()      # one-time: flat data -> users/1/
+    pipeline.migrate_books_to_library()     # one-time: books -> shared library
     from api.worker import ensure_worker
     ensure_worker()
 

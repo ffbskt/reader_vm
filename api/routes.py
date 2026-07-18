@@ -175,7 +175,8 @@ def build_pdf(slug: str, level: int = 0, mode: str = "repeat",
         raise HTTPException(400, "no translated pages at this level yet")
     bdir = pipeline.book_dir(slug)
     meta = json.load(open(os.path.join(bdir, "meta.json"), encoding="utf-8"))
-    out = os.path.join(bdir, f"{meta['slug']}_L{level}_{mode}.pdf")
+    # PDF depends only on (content, level, mode) -> shareable name in the lib
+    out = os.path.join(bdir, f"pdf_L{level}_{mode}.pdf")
     r = subprocess.run(
         [sys.executable, os.path.join(ROOT, "build_pdf.py"),
          "--from", str(done[0]), "--to", str(done[-1]),
