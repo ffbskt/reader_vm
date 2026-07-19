@@ -21,6 +21,9 @@ def tok(sub, email):
                         lambda _: {"sub": sub, "email": email, "name": email}):
         return client.post("/auth/google", json={"id_token": "x"}).json()["token"]
 
+def uid(h):
+    return client.get("/me", headers=h).json()["user"]["id"]
+
 def test_same_book_dedup_and_reuse():
     ha = {"Authorization": "Bearer " + tok("a", "a@x.com")}
     hb = {"Authorization": "Bearer " + tok("b", "b@x.com")}
@@ -47,6 +50,39 @@ def test_same_book_dedup_and_reuse():
     # each user still owns their own named reference
     assert len(client.get("/books", headers=ha).json()["books"]) == 1
     assert len(client.get("/books", headers=hb).json()["books"]) == 1
+
+def test_delete_keeps_shared_content_for_other_owners():
+    ha = {"Authorization": "Bearer " + tok("d", "d@x.com")}
+    hb = {"Authorization": "Bearer " + tok("e", "e@x.com")}
+    # both add the same book -> one shared library copy
+    client.post("/books?name=shared.txt", content=BOOK, headers=ha)
+    client.post("/books?name=shared.txt", content=BOOK, headers=hb)
+    libdir = os.path.join(pipeline.SITE, "library")
+    assert len(os.listdir(libdir)) == 1
+    the_hash = os.listdir(libdir)[0]
+
+    # give the shared book a translation (as if already produced)
+    pipeline.set_user(uid(ha))
+    fp = pipeline.cache_file("shared", 1, 0)
+    os.makedirs(os.path.dirname(fp), exist_ok=True)
+    json.dump({"page": 1, "level": 0, "sentences": [], "coverage_after": 90},
+              open(fp, "w", encoding="utf-8"))
+
+    # Alice deletes HER copy -> shared content must survive (Bob still owns it)
+    r = client.delete("/books/shared", headers=ha).json()
+    assert r["deleted"] is True and r["shared_removed"] is False
+    assert os.path.isdir(os.path.join(libdir, the_hash))          # untouched
+    # Bob still sees the book AND its translation
+    assert len(client.get("/books", headers=hb).json()["books"]) == 1
+    assert client.get("/books/shared/reader?level=0",
+                      headers=hb).json()["pages"]                  # readable
+    # Alice no longer has it
+    assert client.get("/books", headers=ha).json()["books"] == []
+
+    # Bob (the last owner) deletes -> shared content is finally freed
+    r2 = client.delete("/books/shared", headers=hb).json()
+    assert r2["shared_removed"] is True
+    assert not os.path.exists(os.path.join(libdir, the_hash))
 
 def test_different_text_not_deduped():
     ha = {"Authorization": "Bearer " + tok("c", "c@x.com")}

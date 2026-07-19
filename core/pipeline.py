@@ -275,6 +275,47 @@ def list_books():
             out.append(item)
     return out
 
+def _hash_referenced_by_others(text_hash, exclude_uid):
+    """True if any user OTHER than exclude_uid still references this hash."""
+    users = os.path.join(SITE, "users")
+    if not os.path.isdir(users):
+        return False
+    for uid in os.listdir(users):
+        if str(uid) == str(exclude_uid):
+            continue
+        bd = os.path.join(users, uid, "books")
+        if not os.path.isdir(bd):
+            continue
+        for slug in os.listdir(bd):
+            rp = os.path.join(bd, slug, "ref.json")
+            if os.path.exists(rp):
+                try:
+                    if json.load(open(rp, encoding="utf-8"))["hash"] == text_hash:
+                        return True
+                except (OSError, KeyError, ValueError):
+                    pass
+    return False
+
+def delete_book(slug):
+    """Remove the current user's book. Deletes only their ownership ref;
+    the SHARED library content is garbage-collected ONLY when no other user
+    still references it. Returns {deleted, shared_removed}."""
+    slug = _slug(slug)
+    udir = os.path.join(books_dir(), slug)
+    ref = _read_ref(slug)
+    if not os.path.isdir(udir):
+        return {"deleted": False, "shared_removed": False}
+    shared_removed = False
+    if ref:
+        uid = os.path.basename(user_root())
+        if not _hash_referenced_by_others(ref["hash"], uid):
+            lib = os.path.join(library_root(), ref["hash"])
+            if os.path.isdir(lib):
+                shutil.rmtree(lib)
+                shared_removed = True
+    shutil.rmtree(udir)                 # drop this user's reference only
+    return {"deleted": True, "shared_removed": shared_removed}
+
 def migrate_books_to_library():
     """One-time: move each user's per-book content into the shared library
     and leave a ref.json behind. Idempotent (skips dirs that already have a

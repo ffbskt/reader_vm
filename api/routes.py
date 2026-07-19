@@ -81,6 +81,12 @@ async def upload_book(request: Request, name: str = Query(...),
     except ValueError as e:
         raise HTTPException(400, str(e))
 
+@router.delete("/books/{slug}", tags=["books"])
+def delete_book(slug: str, user: dict = Depends(get_current_user)):
+    """Remove this user's book. Shared library content is freed only if no
+    other user still references it (their reading is never touched)."""
+    return pipeline.delete_book(slug)
+
 @router.get("/books/{slug}/stats", tags=["books"])
 def book_stats(slug: str, user: dict = Depends(get_current_user)):
     """Coverage vs the known vocabulary: totals, per-page %, sample of
