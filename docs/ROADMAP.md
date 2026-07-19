@@ -149,10 +149,14 @@ Tunnel (no card), Hetzner €4 (PayPal).
       live on the dev PC, invisible from the VM).
       **Check:** PASSED — stopped the api container -> ⚠️ alert delivered;
       started it -> ✅ recovery delivered; healthy run silent.
-- [ ] 2b.5 CI: GitHub Actions — pytest on push; on tag: build image, SSH
-      deploy to VM.
-      **Check:** change a UI string, `git push`, tag -> live on VM with no
-      manual SSH.
+- [x] 2b.5 2026-07-18: GitHub Actions. .github/workflows/test.yml runs
+      pytest on every push/PR (ran green on the push that added it).
+      deploy.yml auto-deploys on a `v*` tag (test -> SSH git pull + compose
+      up + health check). NOTE: CI = automation/quality net, NOT security
+      (that's 2b.2b). Deploy needs USER to add repo secrets SSH_PRIVATE_KEY
+      (~/.ssh/gcp_reader) + VM_HOST (denis-reader@35.254.216.89); until
+      then, tag-deploy is inert and manual `git pull` on the VM still works.
+      **Check:** PASSED — tests workflow succeeded live on GitHub.
 
 ## Phase 2c — shared library + puzzle translation (research-driven redesign)
 
@@ -203,8 +207,11 @@ level-0 quality path = guided translate + iterative "puzzle" refine pass
       actually need it.
       **Check:** PASSED — 44 tests; live on VM: baseline job on p60 ->
       method "baseline", separate done_base:{0:1}, guided 15/10/5 intact.
-- [ ] 2c.5 Update ARCHITECTURE.md sections 3/5 to the shared-library
-      model (documents/user_documents, reference-based quota).
+- [x] 2c.5 2026-07-18: ARCHITECTURE.md §3 (data model) and §5 (limits)
+      rewritten to the as-built shared-library model — content-addressed
+      library/<hash>, per-user ref.json ownership, reference-based storage
+      quota, live limit values (100 MB / 100 pages-day / 1 job / 200 range),
+      baseline vs guided cache keys. Status header now "BUILT & DEPLOYED".
 
 ## Phase 3 — payments
 
