@@ -89,10 +89,9 @@ a.readlink{color:var(--accent);font-weight:600}
 .bcard-del{position:absolute;top:6px;right:8px;border:none;background:none;
   color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:2px}
 .bcard-del:hover{color:var(--unk)}
-/* auth: give the third-party sign-in buttons room + a tidy row */
-#auth{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
-  justify-content:flex-end}
-#auth iframe{color-scheme:light}
+/* auth: right-aligned row of third-party sign-in buttons */
+#auth{text-align:right}
+#auth>div{display:inline-block;vertical-align:middle;margin-left:10px}
 </style>
 
 <div class="wrap">
@@ -250,7 +249,6 @@ async function initAuth(){
   // target, so a shared box would wipe the Telegram widget.
   const gBox = document.createElement('div');
   const tBox = document.createElement('div');
-  gBox.style.minWidth = '200px';        // GSI sizes to container; don't collapse
   box.append(gBox, tBox);
   // Google button
   if (cfg.google_client_id){
@@ -263,8 +261,7 @@ async function initAuth(){
           body: JSON.stringify({id_token: resp.credential})}).then(saveLogin)});
       const dark = matchMedia('(prefers-color-scheme: dark)').matches;
       google.accounts.id.renderButton(gBox, {
-        theme: dark ? 'filled_blue' : 'outline', size: 'medium',
-        shape: 'pill', text: 'signin_with', width: 200});
+        theme: dark ? 'filled_blue' : 'outline', size: 'medium'});
     };
     document.head.appendChild(s);
   }
