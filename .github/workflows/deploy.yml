@@ -1,0 +1,34 @@
+name: deploy
+
+# Auto-deploy to the VM when a version tag is pushed (e.g. `git tag v1 &&
+# git push --tags`). Requires two repo secrets (Settings -> Secrets and
+# variables -> Actions):
+#   SSH_PRIVATE_KEY  contents of ~/.ssh/gcp_reader (the private key)
+#   VM_HOST          denis-reader@35.254.216.89
+# Tests must pass first (needs: test).
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests/ -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id
+          chmod 600 ~/.ssh/id
+          ssh -i ~/.ssh/id -o StrictHostKeyChecking=no "${{ secrets.VM_HOST }}" \
+            'cd app && git pull -q && nohup docker compose up -d --build > /tmp/ci_deploy.log 2>&1 && sleep 10 && docker compose exec -T api curl -sf localhost:8100/health'

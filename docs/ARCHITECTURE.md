@@ -4,8 +4,9 @@ Target: turn the local pipeline into a multi-user service where the SAME
 backend serves a web app, a Telegram bot, and later a mobile app. Users own a
 library, translations are metered, higher limits are paid.
 
-Status: DESIGN. The current local app (app.html + server.py + pipeline.py)
-is Phase 0 and keeps working throughout the migration.
+Status: BUILT & DEPLOYED (Phases 1–2b done, 2c mostly). Live at
+https://readersimple.duckdns.org. This doc is kept in sync with reality;
+sections marked "as built" describe the running system, not just intent.
 
 ## 1. System overview
 
@@ -58,7 +59,7 @@ Rules that make it scale:
 |---|---|---|
 | API | FastAPI + uvicorn | same, more replicas |
 | DB | SQLite | PostgreSQL |
-| Files | local disk `data/users/<uid>/` | S3/GCS bucket |
+| Files | shared `data/site/library/<hash>/` + per-user refs | S3/GCS bucket |
 | Job queue | one worker thread per process | Redis + arq/Celery workers |
 | Auth | JWT sessions; Google OAuth + Telegram Login | + Apple/Facebook |
 | Payments | — | Stripe Checkout + webhooks |
@@ -67,25 +68,50 @@ Rules that make it scale:
 The v1→v2 swaps are behind interfaces (Storage, Queue, DB session), so they
 are upgrades, not rewrites.
 
-## 3. Data model
+## 3. Data model — as built (shared library + ownership refs)
 
+The big decision (Phase 2c): book text and its translations are **content
+that many users share**, not per-user copies. Users own *references*, not
+files. This came from research — the vocab-guided vs generic coverage gap
+is only ~1.6 pp at levels 25/50, so one translation serves many.
+
+**DB (SQLite, `data/site/app.db`)** — accounts, jobs, counters only:
 ```
-users           id, created, tier(free|plus), email?, google_sub?, tg_id?
-known_sources   id, user_id, name, kind(pdf|list), word_count, file_ref
-books           id, user_id, slug, title, pages, size_bytes, file_ref
-jobs            id, user_id, book_id, level, page_from, page_to,
-                status(queued|running|done|quota|error), done, total,
-                started_at, finished_at, error
-usage           user_id, day, gemini_requests, pages_translated, tokens_est
-payments        id, user_id, provider, amount, period, status, raw
+users        id, created_at, tier(free|plus), email?, google_sub?, tg_id?, name
+jobs         id, user_id, book_slug, level, page_from, page_to, baseline,
+             status(queued|running|done|quota|error), done, total, cached,
+             current_page, eta_s, error, created_at, started_at, finished_at
+job_events   id, job_id, ts, type(page_done|job_done|job_quota|…), payload
+usage        user_id, day, pages          (daily translation quota counter)
+payments     (Phase 3) id, user_id, provider, amount, period, status, raw
 ```
 
-Page cache and dictionaries stay as FILES (they are big, immutable,
-per-book): `users/<uid>/books/<slug>/simplified/page<N>_L<lvl>.json`,
-`word_dict.json`. The DB stores metadata and counters only.
+**Files** — the heavy, immutable content:
+```
+data/site/library/<text_hash>/            SHARED, deduped by normalized text
+    book.txt  meta.json(hash,title,pages)  word_dict.json
+    simplified/page<N>_L<lvl>.json          guided translation
+    simplified/page<N>_L<lvl>_base.json     baseline (no-vocab) translation
+data/site/users/<uid>/
+    known/<slug>.json                       per-user vocabulary sources
+    books/<slug>/ref.json                   OWNERSHIP: {hash, name, title,
+                                            added_at, pages_read}
+```
 
-Cache key stays `(book, page, level, method)` with the 4 discrete levels —
-this is the no-double-pay guarantee and must survive every refactor.
+`pipeline.book_dir(slug)` reads the user's `ref.json` and resolves to the
+shared `library/<hash>` — the single choke point that makes every existing
+function (stats, translate, reader, PDF) shared-storage-aware unchanged.
+Uploading identical text → same hash → **one stored copy; the second user
+instantly sees existing translations.**
+
+Cache key = `(text_hash, page, level, guided|baseline)`. Guided output
+depends on the *vocabulary* used; today it's shared across all users of a
+book (acceptable per the coverage research). Serving guided caches only to
+users with *similar* vocabularies is Phase 2c.3 (vocab-similarity gate,
+not yet built). Baseline output uses no vocabulary → universally shareable.
+
+`user_documents` as a DB table (vs today's `ref.json` files) is the natural
+Postgres-era form; the file refs carry the same fields and migrate 1:1.
 
 ## 4. API contract (v1)
 
@@ -111,23 +137,32 @@ Auth: `Authorization: Bearer <JWT>`. The Telegram bot exchanges its chat's
 `tg_id` for a service JWT — the bot process holds one bot token, users never
 see keys.
 
-## 5. Limits policy
+## 5. Limits policy — as built
 
-Enforced server-side in one place (`quota.py`), checked before every upload
-and before every Gemini call. Counters live in `usage`, reset daily/monthly.
+Enforced server-side: storage on upload (`api/routes.read_upload` +
+`pipeline.storage_used`), translation on job creation + counted by the
+worker (`api/limits.py`, `usage` table). REQUIRE_AUTH=1 in prod, so every
+call needs a valid JWT.
 
-| Limit | Free | Plus (paid) |
-|---|---|---|
-| Library size | 3 books / 30 MB | 30 books / 500 MB |
-| Known sources | 3 | 20 |
-| Pages translated / month | 100 | 2000 |
-| Gemini requests / day | 60 | 1000 |
-| Concurrent jobs | 1 | 3 |
-| PDF builds / day | 10 | 100 |
+**A user's footprint = their own known-vocab files + the shared-library
+content they reference** (`storage_used(uid)`; each referenced book counted
+once). Same book referenced by two users is stored once on disk but counts
+toward both quotas — conservative on purpose.
 
-Behavior at the limit: job pauses with status `quota` + human message and a
-one-tap upgrade path; nothing is lost, resume after reset/upgrade (the
-resume-safe job design already exists).
+| Limit | Free (live) | Plus (Phase 3) | Where |
+|---|---|---|---|
+| Storage / user | **100 MB** | 1 GB | `pipeline.STORAGE_LIMIT`, 413 on upload |
+| Translated pages / day | **100** (uncached only) | 2000 | `limits.DAILY_PAGES` |
+| Concurrent jobs | **1** | 3 | `limits.MAX_CONCURRENT_JOBS` |
+| Pages per translate request | **200** | — | `limits.MAX_RANGE` |
+
+Cached pages are always free and never count. `/me` returns live storage and
+daily-page usage; the web header and Telegram bot show it.
+
+Behavior at the limit: upload → 413 with a clear message; translate → 429
+naming pages left today; a mid-job Gemini 429 parks the job as `quota`,
+resumable later for free (done pages are cached). Not yet built: monthly
+caps, per-day Gemini-request cap, PDF-build cap, one-tap upgrade (Phase 3).
 
 Cost sanity: one page ≈ 5k in / 1.5k out tokens on flash-lite ≈ $0.001.
 Free tier per user ≈ $0.10/month worst case; Plus heavy user ≈ $2/month —
