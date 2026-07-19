@@ -250,6 +250,7 @@ async function initAuth(){
   // target, so a shared box would wipe the Telegram widget.
   const gBox = document.createElement('div');
   const tBox = document.createElement('div');
+  gBox.style.minWidth = '200px';        // GSI sizes to container; don't collapse
   box.append(gBox, tBox);
   // Google button
   if (cfg.google_client_id){
@@ -263,7 +264,7 @@ async function initAuth(){
       const dark = matchMedia('(prefers-color-scheme: dark)').matches;
       google.accounts.id.renderButton(gBox, {
         theme: dark ? 'filled_blue' : 'outline', size: 'medium',
-        shape: 'pill', text: 'signin_with'});
+        shape: 'pill', text: 'signin_with', width: 200});
     };
     document.head.appendChild(s);
   }
