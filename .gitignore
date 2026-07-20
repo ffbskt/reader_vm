@@ -20,3 +20,5 @@ __pycache__/
 
 # local tool state
 .claude/settings.local.json
+
+conversation_bot_token.txt

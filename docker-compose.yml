@@ -24,6 +24,17 @@ services:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
 
+  convbot:
+    build: .
+    restart: unless-stopped
+    env_file: .env            # needs CONVERSATION_BOT_TOKEN + GEMINI_API_KEY
+    command: ["python", "convbot/bot.py"]
+    healthcheck:
+      disable: true          # long-poll worker, no web port to probe
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
   caddy:
     image: caddy:2
     restart: unless-stopped
