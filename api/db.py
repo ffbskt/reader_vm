@@ -78,6 +78,9 @@ def get_db():
         # additive migrations for DBs created before a column existed
         for col, ddl in [("baseline",
                           "ALTER TABLE jobs ADD COLUMN baseline "
+                          "INTEGER NOT NULL DEFAULT 0"),
+                         ("anon",
+                          "ALTER TABLE usage ADD COLUMN anon "
                           "INTEGER NOT NULL DEFAULT 0")]:
             try:
                 con.execute(ddl)
@@ -218,3 +221,18 @@ def add_usage(user_id, pages):
             "INSERT INTO usage(user_id, day, pages) VALUES(?,?,?) "
             "ON CONFLICT(user_id, day) DO UPDATE SET pages = pages + ?",
             (user_id, day, pages, pages))
+
+def anon_today(user_id):
+    day = time.strftime("%Y-%m-%d")
+    with contextlib.closing(get_db()) as con, con:
+        row = con.execute("SELECT anon FROM usage WHERE user_id=? AND day=?",
+                          (user_id, day)).fetchone()
+        return row["anon"] if row else 0
+
+def add_anon_usage(user_id, n):
+    day = time.strftime("%Y-%m-%d")
+    with contextlib.closing(get_db()) as con, con:
+        con.execute(
+            "INSERT INTO usage(user_id, day, anon) VALUES(?,?,?) "
+            "ON CONFLICT(user_id, day) DO UPDATE SET anon = anon + ?",
+            (user_id, day, n, n))

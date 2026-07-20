@@ -1,21 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-Gemini-side of the anonymizer: rewrite message texts replacing every person
-name and place name with its code. Gemini (not a regex) does the replacement
-so Russian inflected forms — Денис / Дениса / Денису, Москва / в Москве —
-all collapse to the same code. Processed in batches with a shared, growing
-map so a name gets the SAME code across the whole conversation.
+Gemini side of the anonymizer. Rewrites message texts replacing names/places
+with stable short codes (handles Russian inflections), and reports each
+entity's CATEGORY (person / city / country / bar / street / …) so the caller
+can render typed labels like "city V". Batched with shared state so a name
+keeps one code across the whole conversation.
+
+scope:
+  "main"   replace ONLY the given main-character name(s) (people/places off)
+  "people" replace all PERSON names (places off)
+  "full"   replace all person names AND all place names
 """
 import json, os, re, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-from simplify_page import MODELS, QuotaError          # reuse model list
+from simplify_page import MODELS, QuotaError
 from analyze import read_api_key
 
-BATCH = 40            # messages per Gemini call
+BATCH = 40
 API_GAP_S = 5
+
+SCOPE_RULE = {
+    "main": ("Replace ONLY these people's names (and their inflected forms): "
+             "{targets}. Leave every other name and all places unchanged."),
+    "people": ("Replace every PERSON name (all inflected forms). "
+               "Leave places unchanged."),
+    "full": ("Replace every PERSON name AND every PLACE / location name "
+             "(city, country, bar, cafe, restaurant, street, shop, company, "
+             "region), all inflected forms."),
+}
+
 
 def _call(prompt):
     import requests
@@ -45,41 +61,44 @@ def _call(prompt):
     raise RuntimeError(f"all models failed: {err}")
 
 
-def anonymize_texts(texts, name_to_code, taken):
-    """Replace names/places in a list of message texts. `name_to_code` and
-    `taken` are shared state carried across batches (mutated in place).
-    Returns the list of anonymized texts (same length/order)."""
+def anonymize_texts(texts, entities, scope="full", targets=None):
+    """Replace names/places in message texts. `entities` is shared state:
+    {canonical_name: {"code": gcode, "type": category}} — mutated in place.
+    Returns the anonymized texts (same order)."""
+    rule = SCOPE_RULE[scope].format(targets=", ".join(targets or []))
     out = []
     for i in range(0, len(texts), BATCH):
         chunk = texts[i:i + BATCH]
-        known = "\n".join(f"{c} = {n}" for n, c in name_to_code.items()) \
-            or "(none yet)"
+        known = "\n".join(f"{e['code']} = {n} ({e['type']})"
+                          for n, e in entities.items()) or "(none yet)"
         numbered = "\n".join(f"{j}. {t}" for j, t in enumerate(chunk))
-        prompt = f"""Anonymize a private chat. In each numbered message, replace every
-PERSON name and every PLACE/location name with a SHORT CODE (1 letter;
-use 2 letters only to stay unique). Same name -> same code everywhere,
-including inflected forms (Russian: Денис/Дениса/Денису -> D; Москва/в
-Москве -> M). Replace ONLY names of people and places — keep all other
-words, punctuation and meaning exactly. Do not translate.
+        prompt = f"""Anonymize a private chat. {rule}
 
-CODES ALREADY ASSIGNED (reuse these, do not change them):
+Replace each target with a SHORT CODE token (1 letter; 2 letters only to stay
+unique), the SAME code everywhere including inflected forms. Keep every other
+word, number and punctuation exactly; do not translate.
+
+CODES ALREADY ASSIGNED (reuse, do not change):
 {known}
 
 Return ONLY JSON:
-{{"texts": ["anonymized message 0", "... message 1", ...],
-  "map": {{"CODE": "canonical name", ...}}}}   (map = NEW codes you added)
+{{"texts": ["anonymized msg 0", "msg 1", ...],
+  "map": {{"CODE": {{"name": "canonical name", "type": "person|city|country|"
+          "bar|cafe|restaurant|street|shop|company|region|place"}}, ...}}}}
+(map = only the NEW codes you introduced)
 
 MESSAGES:
 {numbered}"""
         res = _call(prompt)
-        for code, name in (res.get("map") or {}).items():
+        for code, info in (res.get("map") or {}).items():
             code = str(code).strip()
-            name = str(name).strip()
-            if code and name and name not in name_to_code:
-                name_to_code[name] = code
-                taken.add(code)
+            if isinstance(info, str):
+                info = {"name": info, "type": "person"}
+            name = str(info.get("name", "")).strip()
+            typ = str(info.get("type", "person")).strip().lower()
+            if code and name and name not in entities:
+                entities[name] = {"code": code, "type": typ}
         got = res.get("texts") or []
-        # keep original if the model dropped a line (never lose a message)
         for j, orig in enumerate(chunk):
             out.append(got[j] if j < len(got) and isinstance(got[j], str)
                        else orig)

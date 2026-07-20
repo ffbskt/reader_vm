@@ -48,16 +48,31 @@ def test_assign_code_avoids_taken():
     assert c in taken
 
 
-def test_normalize_codes_pure_letters_substring_safe():
+def test_finalize_typed_labels_substring_safe():
     txt = "[t] D: был в K1 и K12, встретил P5"
-    m = {"Denis": "D", "Ann": "A", "Батуми": "K1", "Тбилиси": "K12",
-         "Фрейд": "P5"}
-    nt, nm = A.normalize_codes(txt, m, keep={"D", "A"})
-    assert all(c.isalpha() for c in nm.values())          # no digits
-    assert len(set(nm.values())) == len(nm)               # unique
-    assert nm["Denis"] == "D" and nm["Ann"] == "A"        # senders kept
-    assert "K1" not in nt and "K12" not in nt             # both replaced
-    assert f"{nm['Батуми']} и {nm['Тбилиси']}" in nt      # order preserved
+    ent = {"Denis": {"code": "D", "type": "person"},
+           "Ann": {"code": "A", "type": "person"},
+           "Батуми": {"code": "K1", "type": "city"},
+           "Тбилиси": {"code": "K12", "type": "city"},
+           "Фрейд": {"code": "P5", "type": "person"}}
+    nt, labels = A.finalize(txt, ent, reserved={"D", "A"})
+    assert "K1" not in nt and "K12" not in nt             # raw codes gone
+    assert labels["Батуми"].startswith("city ")          # typed place
+    assert labels["Фрейд"].isalpha()                     # person = bare letter
+    assert labels["Denis"] == "D"                        # sender preserved
+    # substring safety: Батуми(K1) and Тбилиси(K12) got distinct labels
+    assert labels["Батуми"] != labels["Тбилиси"]
+
+
+def test_time_shift():
+    assert A.shift_time("2026-06-07 15:30:40") == "2026-06-14 15:33:40"
+    assert A.shift_time("bad") == "bad"
+
+
+def test_entity_label():
+    assert A.entity_label("person", "V") == "V"
+    assert A.entity_label("city", "V") == "city V"
+    assert A.entity_label("bar", "O") == "bar O"
 
 
 def test_render_txt_and_map():

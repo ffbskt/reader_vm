@@ -27,10 +27,14 @@ services:
   convbot:
     build: .
     restart: unless-stopped
-    env_file: .env            # needs CONVERSATION_BOT_TOKEN + GEMINI_API_KEY
+    env_file: .env            # CONVERSATION_BOT_TOKEN, GEMINI_API_KEY, OWNER_TG_ID
     command: ["python", "convbot/bot.py"]
     healthcheck:
       disable: true          # long-poll worker, no web port to probe
+    volumes:
+      - ./data:/app/data     # shares the platform DB (users + usage limits)
+    depends_on:
+      - api
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}

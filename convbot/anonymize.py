@@ -9,6 +9,32 @@ The name/place detection over message text uses Gemini (handles Russian
 inflections) and lives in gemini_anonymize_batch().
 """
 import json, re
+from datetime import datetime, timedelta
+
+# what a code looks like per entity category. Persons keep a bare letter;
+# places carry a human label so the reader knows it's a place ("city V").
+PLACE_LABELS = {
+    "city": "city", "country": "country", "bar": "bar", "cafe": "cafe",
+    "restaurant": "restaurant", "street": "street", "region": "region",
+    "shop": "shop", "company": "company", "place": "place",
+}
+
+def entity_label(category, letter):
+    """Render the visible code: person -> 'V'; city -> 'city V'; etc."""
+    cat = (category or "").lower()
+    if cat in ("person", "people", "name", "") :
+        return letter
+    return f"{PLACE_LABELS.get(cat, cat)} {letter}"
+
+
+def shift_time(date_str, weeks=1, minutes=3):
+    """Add a fixed offset to a 'YYYY-MM-DD HH:MM:SS' timestamp."""
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return date_str
+    return (dt + timedelta(weeks=weeks, minutes=minutes)) \
+        .strftime("%Y-%m-%d %H:%M:%S")
 
 
 def flatten_text(text):
@@ -85,13 +111,15 @@ def code_map_for_senders(messages):
     return mapping, taken
 
 
-def render_txt(chat_name, messages, sender_code):
+def render_txt(chat_name, messages, sender_code, time_shift=False):
     """Anonymized transcript: [timestamp] CODE: text (text already
-    anonymized upstream). Sender labels replaced by their codes."""
+    anonymized upstream). Sender labels replaced by their codes. If
+    time_shift, every timestamp is moved +1 week +3 minutes."""
     lines = [f"# {chat_name} (anonymized)", ""]
     for m in messages:
         code = sender_code.get(m["sender"], "?")
-        lines.append(f"[{m['date']}] {code}: {m['text']}")
+        date = shift_time(m["date"]) if time_shift else m["date"]
+        lines.append(f"[{date}] {code}: {m['text']}")
     return "\n".join(lines) + "\n"
 
 
@@ -105,35 +133,36 @@ def _clean_codes(reserved):
                 yield c
 
 
-def normalize_codes(txt, name_to_code, keep):
-    """Remap any code that isn't a clean 1-2 LETTER code (e.g. Gemini's
-    'K1', 'P15') to pure-letter codes, updating both the text and the map.
-    `keep` = codes to preserve as-is (the sender codes). Order follows first
-    appearance in the text so the map reads top-to-bottom.
-    Returns (new_txt, new_name_to_code)."""
-    keep = set(keep)
-    to_remap = {c for c in name_to_code.values()
-                if c not in keep and not re.fullmatch(r"[A-Z]{1,2}", c)}
-    if not to_remap:
-        return txt, name_to_code
-    # order by first appearance (longest codes matched first when searching)
+def finalize(txt, entities, reserved):
+    """Turn Gemini's raw codes into clean typed labels in BOTH the text and
+    the map. `entities` = {name: {"code": gcode, "type": category}}.
+    `reserved` = letter codes already used (sender letters). Persons render as
+    a bare letter, places as 'city V' etc. Returns (new_txt, {name: label})."""
+    reserved = set(reserved)
+    # a stable letter for every entity, preserving any clean sender letters
     def first_pos(code):
         m = re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", txt)
         return m.start() if m else 10 ** 9
-    ordered = sorted(to_remap, key=first_pos)
-    gen = _clean_codes(keep | {c for c in name_to_code.values()
-                               if c in keep or re.fullmatch(r"[A-Z]{1,2}", c)})
-    old_to_new = {old: next(gen) for old in ordered}
-    # placeholder pass avoids collisions (old codes may be substrings)
-    for i, old in enumerate(sorted(to_remap, key=len, reverse=True)):
-        txt = re.sub(rf"(?<![A-Za-z0-9]){re.escape(old)}(?![A-Za-z0-9])",
+    ordered = sorted(entities.items(), key=lambda kv: first_pos(kv[1]["code"]))
+    gen = _clean_codes(reserved)
+    label_of, code_to_label = {}, {}
+    for name, e in ordered:
+        code = e["code"]
+        if re.fullmatch(r"[A-Z]{1,2}", code) and code in reserved:
+            letter = code                      # keep sender letters as-is
+        else:
+            letter = next(gen)
+        label = entity_label(e["type"], letter)
+        label_of[name] = label
+        code_to_label[code] = label
+    # placeholder-safe replacement of each raw code -> its typed label
+    codes = sorted(code_to_label, key=len, reverse=True)
+    for i, code in enumerate(codes):
+        txt = re.sub(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])",
                      f"\x00{i}\x00", txt)
-        old_to_new[f"\x00{i}\x00"] = old_to_new[old]
-    for i, old in enumerate(sorted(to_remap, key=len, reverse=True)):
-        txt = txt.replace(f"\x00{i}\x00", old_to_new[old])
-    new_map = {name: old_to_new.get(code, code)
-               for name, code in name_to_code.items()}
-    return txt, new_map
+    for i, code in enumerate(codes):
+        txt = txt.replace(f"\x00{i}\x00", code_to_label[code])
+    return txt, label_of
 
 
 def render_map(name_to_code):
