@@ -19,9 +19,13 @@ def fold(w):
 # never a help language, so no self-translation)
 HELP_LANGS = ("en", "ru", "fr", "es", "de", "it")
 
-def load_dictionary(pages_results):
+def load_dictionary(pages_results, include_global=True):
     """folded source word -> {lang: translation}. Merges PER LANGUAGE so a
-    word with page-vocab en/ru still gains fr/… from the bulk word_dict."""
+    word with page-vocab en/ru still gains fr/… from the bulk word_dict.
+
+    include_global=False skips the legacy repo-wide data/word_dict.json —
+    shared-library books must NOT inherit it (it is Spanish/Celestina, and
+    e.g. English "pan" would wrongly get the Spanish "bread")."""
     d = {}
     def merge(k, trans):
         if not k:
@@ -36,7 +40,7 @@ def load_dictionary(pages_results):
             merge(fold(str(v.get("es", "")).strip()),
                   {l: v.get(l) for l in HELP_LANGS if l != "es"})
     wd = os.path.join(ROOT, "data", "word_dict.json")
-    if os.path.exists(wd):
+    if include_global and os.path.exists(wd):
         for k, v in json.load(open(wd, encoding="utf-8")).items():
             merge(k, v if isinstance(v, dict) else {})
     return d

@@ -915,6 +915,127 @@ def _all_cached_results(slug):
         out.append(json.load(open(fp, encoding="utf-8")))
     return out
 
+LANG_NAMES = {"en": "English", "ru": "Russian", "fr": "French",
+              "es": "Spanish", "de": "German", "it": "Italian"}
+
+def _gemini_json(prompt, timeout=120):
+    """One Gemini call expecting a JSON reply. Raises QuotaError on 429."""
+    key = read_api_key()
+    if not key:
+        raise RuntimeError("no API key")
+    import requests as _rq
+    err = None
+    for model in MODELS:
+        try:
+            r = _rq.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent?key={key}",
+                json={"contents": [{"parts": [{"text": prompt}]}],
+                      "generationConfig": {"temperature": 0.1}}, timeout=timeout)
+            if r.status_code == 404:
+                continue
+            if r.status_code == 429:
+                raise QuotaError("429 from Gemini")
+            r.raise_for_status()
+            txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return json.loads(re.sub(r"^```(json)?|```$", "", txt.strip(),
+                                     flags=re.M).strip())
+        except QuotaError:
+            raise
+        except Exception as e:
+            err = str(e).replace(key, "***")
+    raise RuntimeError(f"all models failed: {err}")
+
+def _merged_book_dictionary(slug):
+    """Shared per-book dictionary: page vocab + the book's word_dict,
+    merged PER LANGUAGE. Never inherits the legacy repo-wide word_dict —
+    that one is Spanish and would mistranslate other languages."""
+    from core.vocab import load_dictionary
+    d = load_dictionary(_all_cached_results(slug), include_global=False)
+    for k, v in _book_word_dict(slug).items():
+        if isinstance(v, dict):
+            slot = d.setdefault(k, {})
+            for lang, val in v.items():
+                if val and lang not in slot:
+                    slot[lang] = val
+    return d
+
+def words_needing_language(slug, lang, limit=1200):
+    """Words of this book that still lack `lang`, most frequent first.
+    Guided pages expose unknown_after; baseline pages don't, so fall back to
+    the simplified text's own content words."""
+    from core.vocab import lookup
+    dictionary = _merged_book_dictionary(slug)
+    cnt = Counter()
+    for r in _all_cached_results(slug):
+        for s in r.get("sentences", []):
+            unknown = s.get("unknown_after")
+            if unknown:
+                for w in unknown:
+                    cnt[fold(w)] += 1
+            else:
+                for w in counted_words(s.get("simple", "").lower()):
+                    if len(w) > 2:
+                        cnt[fold(w)] += 1
+    out = [w for w, _ in cnt.most_common()
+           if not lookup(dictionary, w, [lang])]
+    return out[:limit]
+
+def fill_language(slug, lang, max_batches=None, batch=120):
+    """Batch-translate this book's remaining words into `lang`, caching in
+    the SHARED per-book word_dict (so every user of the book benefits).
+    Idempotent; bounded by max_batches so a caller can keep latency sane.
+    Returns {added, requests, remaining}."""
+    slug = _slug(slug)
+    if lang not in LANG_NAMES:
+        raise ValueError(f"unsupported language {lang!r}")
+    missing = words_needing_language(slug, lang)
+    if not missing:
+        return {"added": 0, "requests": 0, "remaining": 0}
+    book_dict = _book_word_dict(slug)
+    chunks = [missing[i:i + batch] for i in range(0, len(missing), batch)]
+    if max_batches:
+        chunks = chunks[:max_batches]
+    added = reqs = 0
+    for chunk in chunks:
+        prompt = (
+            f"Translate each word below into {LANG_NAMES[lang]} (short, "
+            "dictionary-style). The words come from a book and some are "
+            "inflected forms — translate the underlying word. Copy each "
+            'given word EXACTLY into "w".\n'
+            'Reply ONLY with JSON: [{"w": "given word", "t": "translation"}]'
+            "\n\n" + " ".join(chunk))
+        try:
+            rows = _gemini_json(prompt)
+        except QuotaError:
+            raise
+        except Exception:
+            continue
+        reqs += 1
+        for row in rows if isinstance(rows, list) else []:
+            w = fold(str(row.get("w", "")).strip())
+            t = str(row.get("t", "")).strip()
+            if w and t:
+                book_dict.setdefault(w, {})
+                if lang not in book_dict[w]:
+                    book_dict[w][lang] = t
+                    added += 1
+        time.sleep(API_GAP_S)
+    with open(os.path.join(book_dir(slug), "word_dict.json"), "w",
+              encoding="utf-8") as f:
+        json.dump(book_dict, f, ensure_ascii=False, indent=1)
+    return {"added": added, "requests": reqs,
+            "remaining": max(0, len(missing) - added)}
+
+def book_languages(slug):
+    """Which help languages this book's shared dictionary already covers,
+    with how many words each (for the UI / language picker)."""
+    counts = Counter()
+    for v in _merged_book_dictionary(_slug(slug)).values():
+        for lang in v:
+            counts[lang] += 1
+    return dict(counts)
+
 def fill_missing_translations(slug):
     """Translate every word that occurs in the simplified texts but has no
     dictionary entry — ONE batched Gemini request per ~120 words, merged into
@@ -993,15 +1114,9 @@ def reader_payload(slug, level, baseline=False, langs=None):
         results.append(json.load(open(cache_file(slug, p, level, baseline),
                                       encoding="utf-8")))
     # hover dictionary: vocab from EVERY cached page at EVERY level of this
-    # book + the book's gap-fill word_dict, so translations collected once
-    # help everywhere. Merge PER LANGUAGE, then narrow to requested langs.
-    dictionary = load_dictionary(_all_cached_results(slug) or results)
-    for k, v in _book_word_dict(slug).items():
-        if isinstance(v, dict):
-            slot = dictionary.setdefault(k, {})
-            for lang, val in v.items():
-                if val and lang not in slot:
-                    slot[lang] = val
+    # book + the book's gap-fill word_dict, merged PER LANGUAGE (and never
+    # the legacy Spanish global dict), then narrowed to requested langs.
+    dictionary = _merged_book_dictionary(slug)
     filtered = {}
     for k, v in dictionary.items():
         sub = {l: v[l] for l in langs if l in v}

@@ -177,6 +177,36 @@ def reader_data(slug: str, level: int = 0, baseline: bool = False,
     except FileNotFoundError:
         raise HTTPException(404, f"book {slug!r} not found")
 
+@router.get("/books/{slug}/languages", tags=["reader"])
+def book_languages(slug: str, user: dict = Depends(get_current_user)):
+    """Help languages this book's shared dictionary already covers."""
+    return {"languages": pipeline.book_languages(slug),
+            "supported": list(pipeline.LANG_NAMES)}
+
+@router.post("/books/{slug}/languages/{lang}", tags=["reader"])
+def fill_book_language(slug: str, lang: str, batches: int = 3,
+                       user: dict = Depends(get_current_user)):
+    """Generate the hover dictionary for a help language this book lacks.
+    Bounded per call (so the UI can show progress and call again); results
+    are cached in the SHARED book dictionary, so the next reader pays $0."""
+    if lang not in pipeline.LANG_NAMES:
+        raise HTTPException(400, f"unsupported language {lang!r}")
+    pending = len(pipeline.words_needing_language(slug, lang))
+    if not pending:
+        return {"done": True, "added": 0, "remaining": 0}
+    used = db.usage_today(user["id"])
+    if used >= limits.DAILY_PAGES:
+        raise HTTPException(429, "daily limit reached — try again tomorrow")
+    batches = max(1, min(int(batches), 5))
+    try:
+        res = pipeline.fill_language(slug, lang, max_batches=batches)
+    except pipeline.QuotaError as e:
+        raise HTTPException(429, f"Gemini quota: {e}")
+    if res["requests"]:
+        db.add_usage(user["id"], res["requests"])   # meter it like a page
+    res["done"] = res["remaining"] == 0
+    return res
+
 @router.get("/books/{slug}/pdf", tags=["reader"])
 def build_pdf(slug: str, level: int = 0, mode: str = "repeat",
               baseline: bool = False,
