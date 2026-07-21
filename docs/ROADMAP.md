@@ -242,64 +242,66 @@ words are translated into it on hover (reader AND public teaser). One primary
 UI (menu, labels) switches to the primary language too. A language bar sits
 always on top.
 
+Languages (start): en, ru, fr, es (user choice 2026-07-21). More later.
+
 **Core design — reading language ⟂ help language(s).**
 - The book's SIMPLIFIED TEXT is language-independent of help language, so the
   page cache (page<N>_L<lvl>[_base].json) stays SHARED across all users and
   all help languages. Nothing about this changes.
-- Only the WORD DICTIONARY is per-help-language. Store it multilingual and
-  shared per book: word_dict.json = {folded_word: {en, ru, fr, de, …}}.
-  A help language's column is generated LAZILY (Gemini) the first time any
-  user reads that book needing it, then cached for everyone → pay once.
-- UI strings are STATIC per-language tables (no runtime cost, reliable).
 - "Site language" sets BOTH the UI language and the default (primary) help
   language; "add second language" adds a 2nd help language for hover only.
+- UI strings are STATIC per-language tables (no runtime cost, reliable).
 
-Supported set (start): en, ru, fr, es, de, it (Gemini can add more later).
+**TWO translation tiers (user decision — word translation loses context;
+polysemy/idioms need meaning-aware translation).**
+- **Tier 1 — instant, FREE, context-free.** A general downloaded dictionary
+  maps book-language word -> help language(s). Hover shows it immediately,
+  no Gemini, no cost. Covers the common case (~90%). Missing words fall back
+  to the existing per-book Gemini gap-fill dict.
+- **Tier 2 — precise, ON-DEMAND, costs quota + progress bar.** A "better
+  translation" button asks Gemini to translate the word IN ITS SENTENCE, or
+  the WHOLE sentence, preserving meaning. Result cached in the shared book
+  dict (context-tagged). This is the fix for meaning loss.
 
-- [ ] 2e.1 Multilingual dictionary model. Migrate word_dict from {es:{en,ru}}
-      to {word:{lang:translation}}; core.vocab.lookup(word, langs) returns
-      the requested langs (morphology unchanged). Back-fill existing en/ru.
-      Page-vocab embedded en/ru becomes dict-sourced (page stores the unknown
-      words; translations resolved from the shared dict at read time).
+- [ ] 2e.1 Multilingual dictionary model. word_dict -> {word:{lang:translation}}
+      (+ optional per-context overrides for Tier 2). core.vocab.lookup(word,
+      langs) returns requested langs (morphology unchanged). Back-fill en/ru.
+      Page stores unknown words; translations resolved from the shared dict
+      at read time (drop embedded en/ru).
       **Check:** existing EN/RU hovers unchanged; dict keyed per language.
-- [ ] 2e.2 Lazy per-language word generation. pipeline.fill_language(book,
-      lang): find words in the book's translated pages lacking `lang`,
-      batch-translate into `lang` (one Gemini request / ~120 words), cache in
-      the shared word_dict. Counts against the daily budget; reuses the
-      gap-fill batching. Idempotent.
-      **Check:** a book with only en/ru -> request fr -> French column
-      generated + cached; second request instant, no API call.
-- [ ] 2e.3 API: help-language params. reader/samples/pdf accept
-      `langs=<primary>[,<second>]`; reader_payload returns the dictionary
-      for those langs, triggering 2e.2 if a language is missing (returns a
-      "generating" state the client can poll). Persist the user's languages
-      on the users row (ui_lang, help_langs); GET/PUT /me/languages.
+- [ ] 2e.2 Tier-1 dictionary import (SPIKE + build). Pick an open source
+      (FreeDict / Wiktextract-kaikki / dbnary) and import book-lang -> {en,
+      ru,fr,es} word dictionaries into a shared store, checking coverage for
+      es/fr/it/en source books. Build import_dict.py. Instant free lookup;
+      Gemini gap-fill only fills misses.
+      **Check:** a fresh book gets instant hovers for common words with ZERO
+      Gemini calls; coverage measured and reported.
+- [ ] 2e.3 Tier-2 context translation. POST /translate-word {book, page,
+      word, sentence, langs} and /translate-sentence -> Gemini in-context
+      result, cached (context-tagged) in the shared dict; counts to the
+      daily quota; returns progress for the UI. "better translation" button
+      in the reader per word + per sentence.
+      **Check:** an idiom/polyseme gets a context-correct translation via the
+      button; second click on the same word+context is free (cached).
+- [ ] 2e.4 API: help-language params + persistence. reader/samples/pdf accept
+      `langs=<primary>[,<second>]`; reader_payload returns the dict for those
+      langs. users row gains ui_lang, help_langs; GET/PUT /me/languages.
       **Check:** reader?langs=fr and ?langs=en,ru return the right dicts;
-      user's choice persists across sessions.
-- [ ] 2e.4 UI i18n. Static strings table strings.json for en/ru/fr/es/de/it
-      (~40 keys: step titles, buttons, messages). app.html + reader_site.html
-      render every label via t(key) for the chosen UI language. Keep English
-      as the fallback for missing keys.
-      **Check:** switch UI language -> all menu/labels change; no hard-coded
-      English left in the chrome.
-- [ ] 2e.5 Language bar (always on top). Top component: primary-language
-      select + "＋ add second language" toggle (max 2). Persisted (2e.3 +
-      localStorage). Drives UI language, hover languages, teaser, and the
-      reader link (carries langs). Replaces the ad-hoc auth-row placement.
-      **Check:** pick French -> UI + hovers French; add Russian -> hovers
-      show both; reload keeps the choice.
-- [ ] 2e.6 Hover in reader + PUBLIC teaser. reader_site shows 1-2 help
-      languages per word (touch/hover). The logged-out /samples teaser gets
-      the same per-word hover (needs the sample pages' dictionary in the
-      chosen/browser language; a small language picker on the teaser).
-      **Check:** touch a word in the teaser and in the reader -> correct
-      translation(s) in the selected 1-2 languages.
-- [ ] 2e.7 Autonomous/gap-fill language policy. The background translator
-      pre-generates ONLY the site default help language(s) for featured
-      books; all other languages stay on-demand (2e.2) to stay far from
-      limits. Document the budget split.
-      **Check:** background stays within the 80/day budget; on-demand
-      languages appear only after a user requests them.
+      choice persists across sessions.
+- [ ] 2e.5 UI i18n. Static strings.json for en/ru/fr/es (~40 keys). app.html
+      + reader_site.html render every label via t(key); English fallback.
+      **Check:** switch UI language -> all menu/labels change.
+- [ ] 2e.6 Language bar (always on top). primary-language select + "＋ add
+      second language" (max 2), persisted. Drives UI language, hover langs,
+      teaser, and the reader link.
+      **Check:** pick French -> UI + hovers French; add Russian -> both;
+      reload keeps it.
+- [ ] 2e.7 Hover in reader + PUBLIC teaser. reader_site + the logged-out
+      /samples teaser show 1-2 help languages per word (touch/hover) with the
+      Tier-2 "better translation" affordance; teaser gets a small language
+      picker (default = browser language).
+      **Check:** touch a word in teaser and reader -> correct translation(s)
+      in the selected 1-2 languages.
 
 ## Phase 3 — payments
 
