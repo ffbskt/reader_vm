@@ -216,11 +216,35 @@ def _read_ref(slug):
     fp = _ref_path(slug)
     return json.load(open(fp, encoding="utf-8")) if os.path.exists(fp) else None
 
+# featured "public shelf": owner-curated books every logged-in user can read.
+# data/site/featured.json = [{slug, hash, title, lang, pages}]
+def _featured_path():
+    return os.path.join(SITE, "featured.json")
+
+def featured_books():
+    fp = _featured_path()
+    if os.path.exists(fp):
+        try:
+            return json.load(open(fp, encoding="utf-8"))
+        except ValueError:
+            pass
+    return []
+
+def _featured_hash(slug):
+    slug = _slug(slug)
+    for f in featured_books():
+        if f["slug"] == slug:
+            return f["hash"]
+    return None
+
 def book_dir(slug):
     """Physical dir of a book's shared content for the current user."""
     ref = _read_ref(slug)
     if ref:
         return os.path.join(library_root(), ref["hash"])
+    fh = _featured_hash(slug)                        # a public featured book
+    if fh:
+        return os.path.join(library_root(), fh)
     return os.path.join(books_dir(), _slug(slug))   # legacy (pre-migration)
 
 def add_book(filename, blob):
@@ -273,6 +297,45 @@ def list_books():
                      for f in os.listdir(sd)] if os.path.isdir(sd) else []
             item["updated"] = max(times) if times else os.path.getmtime(mp)
             out.append(item)
+    # featured public books the user doesn't already own (read-only shelf)
+    owned = {b["slug"] for b in out}
+    for f in featured_books():
+        if f["slug"] in owned:
+            continue
+        lib = os.path.join(library_root(), f["hash"])
+        mp = os.path.join(lib, "meta.json")
+        if not os.path.exists(mp):
+            continue
+        m = json.load(open(mp, encoding="utf-8"))
+        out.append({"slug": f["slug"], "featured": True, "lang": f.get("lang"),
+                    "title": f.get("title", m.get("title", f["slug"])),
+                    "pages": m.get("pages", 0),
+                    "done_pages": {lv: len(cached_pages(f["slug"], lv))
+                                   for lv in LEVELS},
+                    "done_base": {lv: len(cached_pages(f["slug"], lv, True))
+                                  for lv in LEVELS},
+                    "updated": os.path.getmtime(mp)})
+    return out
+
+def reading_samples(max_pairs=2):
+    """Public teaser (no login): one original->simplified excerpt per
+    language, from the featured books' baseline level-0 translations."""
+    out, seen = [], set()
+    for f in featured_books():
+        lang = f.get("lang")
+        if lang in seen:
+            continue
+        pages = cached_pages(f["slug"], 0, baseline=True)
+        if not pages:
+            continue
+        r = json.load(open(cache_file(f["slug"], pages[0], 0, baseline=True),
+                           encoding="utf-8"))
+        pairs = [{"orig": s["orig"], "simple": s["simple"]}
+                 for s in r.get("sentences", [])
+                 if s.get("orig") and s.get("simple")][:max_pairs]
+        if pairs:
+            out.append({"title": f["title"], "lang": lang, "pairs": pairs})
+            seen.add(lang)
     return out
 
 def _hash_referenced_by_others(text_hash, exclude_uid):

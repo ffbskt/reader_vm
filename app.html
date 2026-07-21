@@ -89,6 +89,18 @@ a.readlink{color:var(--accent);font-weight:600}
 .bcard-del{position:absolute;top:6px;right:8px;border:none;background:none;
   color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:2px}
 .bcard-del:hover{color:var(--unk)}
+.feat{display:inline-block;background:var(--accent);color:var(--accent-ink);
+  font-size:.62rem;border-radius:8px;padding:1px 7px;margin-left:6px;
+  vertical-align:middle;letter-spacing:.03em}
+.samples{margin:8px 0 26px}
+.samples h2{font-size:1.05rem;margin:0 0 12px}
+.sample{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:12px 16px;margin:0 0 10px}
+.sample-h{font-weight:600;margin-bottom:6px}
+.sample-h span{font-size:.7rem;color:var(--muted);text-transform:uppercase;
+  margin-left:6px;letter-spacing:.05em}
+.sample .orig{color:var(--muted);margin:4px 0 0;font-style:italic}
+.sample .simp{color:var(--ink);margin:2px 0 6px}
 /* auth: right-aligned row of third-party sign-in buttons */
 #auth{text-align:right}
 #auth>div{display:inline-block;vertical-align:middle;margin-left:10px}
@@ -214,6 +226,21 @@ const api = (path, opts = {}) => fetch(path,
   });
 
 // ---- sign-in: Google + Telegram (2b.1) ----
+async function showSamples(){
+  const d = await fetch('/samples').then(r => r.json()).catch(() => ({}));
+  if (!d.samples || !d.samples.length) return;
+  const flag = {English:'🇬🇧', French:'🇫🇷', Italian:'🇮🇹', Spanish:'🇪🇸',
+                German:'🇩🇪'};
+  const html = d.samples.map(s => `<div class="sample">
+    <div class="sample-h">${flag[s.lang] || '📖'} ${s.title}
+      <span>${s.lang}</span></div>
+    ${s.pairs.map(p => `<p class="orig">${p.orig}</p>
+      <p class="simp">→ ${p.simple}</p>`).join('')}</div>`).join('');
+  const box = document.createElement('div');
+  box.className = 'samples';
+  box.innerHTML = '<h2>See it in action — original vs. simplified</h2>' + html;
+  $('loginNote').insertAdjacentElement('afterend', box);
+}
 function saveLogin(d){
   if (d.token){
     localStorage.setItem('jwt', d.token);
@@ -242,8 +269,9 @@ async function initAuth(){
   if (cfg.require_auth){
     box.insertAdjacentHTML('afterend',
       '<p class="sub" id="loginNote" style="color:var(--unk)">Please sign in '
-      + '(top-right) to upload books and translate. Your library is private '
-      + 'to your account, with 100 MB and a daily translation limit.</p>');
+      + '(top-right) to read the shared library and translate your own books. '
+      + 'Below is a taste of what the app does.</p>');
+    showSamples();
   }
   // each provider gets its OWN container — Google's renderButton clears its
   // target, so a shared box would wipe the Telegram widget.
@@ -345,13 +373,17 @@ async function refreshBooks(sel){
   const d = await api('/books');
   const books = d.books || [];
   $('bookCards').innerHTML = books.map(b => {
-    const total = Object.values(b.done_pages).reduce((a, n) => a + n, 0);
+    const base = Object.values(b.done_base || {}).reduce((a, n) => a + n, 0);
+    const total = Object.values(b.done_pages).reduce((a, n) => a + n, 0) + base;
+    const badge = b.featured
+      ? `<span class="feat">★ ${b.lang || 'featured'}</span>` : '';
+    const del = b.featured ? '' :
+      `<button class="bcard-del" data-s="${b.slug}" title="remove from my library"
+        aria-label="remove ${b.title}">✕</button>`;
     return `<div class="bcard ${b.slug === book ? 'on' : ''}" data-s="${b.slug}">
-      <button class="bcard-pick" data-s="${b.slug}"><b>${b.title}</b>
-      <span>${b.pages} pages · ${total ? total + ' p. translated'
-        : 'not translated yet'}</span></button>
-      <button class="bcard-del" data-s="${b.slug}" title="remove from my library"
-        aria-label="remove ${b.title}">✕</button></div>`;
+      <button class="bcard-pick" data-s="${b.slug}"><b>${b.title}</b>${badge}
+      <span>${b.pages} pages · ${total ? total + ' p. ready'
+        : 'not translated yet'}</span></button>${del}</div>`;
   }).join('') || '<span class="jobline">no books yet — upload one above</span>';
   document.querySelectorAll('#bookCards .bcard-pick').forEach(c =>
     c.onclick = () => selectBook(c.dataset.s));

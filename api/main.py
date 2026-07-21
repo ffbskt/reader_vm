@@ -41,6 +41,13 @@ def health():
     """Liveness probe for monitors and load balancers."""
     return {"status": "ok", "version": VERSION}
 
+@app.get("/samples", tags=["system"])
+def samples():
+    """Public (no login): a before/after excerpt per language, so visitors
+    see what the app does before signing in."""
+    from core import pipeline
+    return {"samples": pipeline.reading_samples()}
+
 @app.get("/me", tags=["auth"])
 def me(user: dict = Depends(get_current_user)):
     """The authenticated user's profile, tier, storage, and daily quota."""
