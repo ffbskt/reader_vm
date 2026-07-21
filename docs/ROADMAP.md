@@ -263,19 +263,28 @@ polysemy/idioms need meaning-aware translation).**
   the WHOLE sentence, preserving meaning. Result cached in the shared book
   dict (context-tagged). This is the fix for meaning loss.
 
-- [ ] 2e.1 Multilingual dictionary model. word_dict -> {word:{lang:translation}}
-      (+ optional per-context overrides for Tier 2). core.vocab.lookup(word,
-      langs) returns requested langs (morphology unchanged). Back-fill en/ru.
-      Page stores unknown words; translations resolved from the shared dict
-      at read time (drop embedded en/ru).
-      **Check:** existing EN/RU hovers unchanged; dict keyed per language.
-- [ ] 2e.2 Tier-1 dictionary import (SPIKE + build). Pick an open source
-      (FreeDict / Wiktextract-kaikki / dbnary) and import book-lang -> {en,
-      ru,fr,es} word dictionaries into a shared store, checking coverage for
-      es/fr/it/en source books. Build import_dict.py. Instant free lookup;
-      Gemini gap-fill only fills misses.
-      **Check:** a fresh book gets instant hovers for common words with ZERO
-      Gemini calls; coverage measured and reported.
+- [x] 2e.1 2026-07-21: multilingual dictionary model. word_dict values are
+      already {lang:translation}; load_dictionary now MERGES per language
+      (page-vocab en/ru + word_dict fr/… combine); vocab.lookup(word, langs)
+      filters to requested langs (morphology unchanged); reader_payload +
+      GET /books/{slug}/reader take langs=en,ru (max 2). 56 tests.
+      **Check:** PASSED — per-language merge + langs filter tested; existing
+      EN/RU hovers unchanged; deployed.
+- [x] 2e.2 SPIKE DONE 2026-07-21 -> DECISION: skip FreeDict, use Gemini
+      gap-fill multilingually. Measured FreeDict spa-rus (11.7k words) on
+      SIMPLIFIED Celestina (user's point: simplified text = common words):
+      token coverage 73% simplified vs 28% original (simplification helps a
+      lot). BUT the 27% misses are mostly function words the learner already
+      knows + irregular verbs; and our per-book Gemini gap-fill already gives
+      ~100% coverage, cached + shared, ~$0.02/book/language. FreeDict adds
+      complexity + partial coverage for no real saving. -> 2e.2 becomes:
+      make gap-fill multilingual (fill_language, lazy per requested lang).
+- [ ] 2e.2b Multilingual gap-fill. pipeline.fill_language(slug, lang): batch
+      -translate the book's remaining unknown words into `lang`, cache in the
+      shared word_dict {word:{...,lang:...}}. Lazy: triggered when a reader
+      requests a language the book lacks. Counts to the daily budget.
+      **Check:** request fr on a book with only en/ru -> French filled +
+      cached; second read instant, no API.
 - [ ] 2e.3 Tier-2 context translation. POST /translate-word {book, page,
       word, sentence, langs} and /translate-sentence -> Gemini in-context
       result, cached (context-tagged) in the shared dict; counts to the
