@@ -234,6 +234,73 @@ level-0 quality path = guided translate + iterative "puzzle" refine pass
 - [ ] 2d.4 Improve weak samples (French sample is a title line) — pick the
       first CONTENT page, not the front matter, for the teaser.
 
+## Phase 2e — multilingual help languages + UI language (user-requested 2026-07-21)
+
+Goal: the user picks the language THEY understand ("help language"); hard
+words are translated into it on hover (reader AND public teaser). One primary
++ an optional second ("add second language", like today's EN+RU). The whole
+UI (menu, labels) switches to the primary language too. A language bar sits
+always on top.
+
+**Core design — reading language ⟂ help language(s).**
+- The book's SIMPLIFIED TEXT is language-independent of help language, so the
+  page cache (page<N>_L<lvl>[_base].json) stays SHARED across all users and
+  all help languages. Nothing about this changes.
+- Only the WORD DICTIONARY is per-help-language. Store it multilingual and
+  shared per book: word_dict.json = {folded_word: {en, ru, fr, de, …}}.
+  A help language's column is generated LAZILY (Gemini) the first time any
+  user reads that book needing it, then cached for everyone → pay once.
+- UI strings are STATIC per-language tables (no runtime cost, reliable).
+- "Site language" sets BOTH the UI language and the default (primary) help
+  language; "add second language" adds a 2nd help language for hover only.
+
+Supported set (start): en, ru, fr, es, de, it (Gemini can add more later).
+
+- [ ] 2e.1 Multilingual dictionary model. Migrate word_dict from {es:{en,ru}}
+      to {word:{lang:translation}}; core.vocab.lookup(word, langs) returns
+      the requested langs (morphology unchanged). Back-fill existing en/ru.
+      Page-vocab embedded en/ru becomes dict-sourced (page stores the unknown
+      words; translations resolved from the shared dict at read time).
+      **Check:** existing EN/RU hovers unchanged; dict keyed per language.
+- [ ] 2e.2 Lazy per-language word generation. pipeline.fill_language(book,
+      lang): find words in the book's translated pages lacking `lang`,
+      batch-translate into `lang` (one Gemini request / ~120 words), cache in
+      the shared word_dict. Counts against the daily budget; reuses the
+      gap-fill batching. Idempotent.
+      **Check:** a book with only en/ru -> request fr -> French column
+      generated + cached; second request instant, no API call.
+- [ ] 2e.3 API: help-language params. reader/samples/pdf accept
+      `langs=<primary>[,<second>]`; reader_payload returns the dictionary
+      for those langs, triggering 2e.2 if a language is missing (returns a
+      "generating" state the client can poll). Persist the user's languages
+      on the users row (ui_lang, help_langs); GET/PUT /me/languages.
+      **Check:** reader?langs=fr and ?langs=en,ru return the right dicts;
+      user's choice persists across sessions.
+- [ ] 2e.4 UI i18n. Static strings table strings.json for en/ru/fr/es/de/it
+      (~40 keys: step titles, buttons, messages). app.html + reader_site.html
+      render every label via t(key) for the chosen UI language. Keep English
+      as the fallback for missing keys.
+      **Check:** switch UI language -> all menu/labels change; no hard-coded
+      English left in the chrome.
+- [ ] 2e.5 Language bar (always on top). Top component: primary-language
+      select + "＋ add second language" toggle (max 2). Persisted (2e.3 +
+      localStorage). Drives UI language, hover languages, teaser, and the
+      reader link (carries langs). Replaces the ad-hoc auth-row placement.
+      **Check:** pick French -> UI + hovers French; add Russian -> hovers
+      show both; reload keeps the choice.
+- [ ] 2e.6 Hover in reader + PUBLIC teaser. reader_site shows 1-2 help
+      languages per word (touch/hover). The logged-out /samples teaser gets
+      the same per-word hover (needs the sample pages' dictionary in the
+      chosen/browser language; a small language picker on the teaser).
+      **Check:** touch a word in the teaser and in the reader -> correct
+      translation(s) in the selected 1-2 languages.
+- [ ] 2e.7 Autonomous/gap-fill language policy. The background translator
+      pre-generates ONLY the site default help language(s) for featured
+      books; all other languages stay on-demand (2e.2) to stay far from
+      limits. Document the budget split.
+      **Check:** background stays within the 80/day budget; on-demand
+      languages appear only after a user requests them.
+
 ## Phase 3 — payments
 
 - [ ] 3.1 Stripe account, Checkout for Plus, webhook -> tier (test mode).
