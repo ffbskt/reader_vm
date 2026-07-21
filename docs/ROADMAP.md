@@ -213,6 +213,27 @@ level-0 quality path = guided translate + iterative "puzzle" refine pass
       quota, live limit values (100 MB / 100 pages-day / 1 job / 200 range),
       baseline vs guided cache keys. Status header now "BUILT & DEPLOYED".
 
+## Phase 2d — content & reach (TODO, user-requested 2026-07-21)
+
+- [x] 2d.1 2026-07-21: autonomous public-domain library. fetch_books.py
+      pulled Alice/Grimm/Andersen (EN), La Fontaine (FR), Pinocchio (IT)
+      from Gutenberg into the owner's shared library (~1057 pages).
+      auto_translate.py cron */30 trickles baseline L0 at 80 pages/day
+      (far under Gemini free tier + the 100/day quota).
+- [x] 2d.2 2026-07-21: featured public shelf — featured.json; book_dir +
+      list_books resolve featured books for EVERY logged-in user (read-only,
+      ★ badge, no delete). La Celestina + the 5 classics featured. Public
+      /samples endpoint + logged-out before/after teaser (EN/FR/IT/ES).
+- [ ] 2d.3 Generalize the tokenizer beyond Spanish/Latin: analyze.WORD_RE
+      + fold + counted_words are Latin-only (áéíóúñü). Add other Latin
+      accents (à è ê ç ä ö ß ì ò ù …) and a Unicode-letter path for
+      Cyrillic/Greek so Russian (Pushkin), etc. work. Affects tokenization,
+      the "almost no text" guard, coverage scoring, and hover vocab.
+      **Check:** a Russian Gutenberg book -> baseline L0 page has >20
+      tokens and readable output; hover vocab non-empty.
+- [ ] 2d.4 Improve weak samples (French sample is a title line) — pick the
+      first CONTENT page, not the front matter, for the teaser.
+
 ## Phase 3 — payments
 
 - [ ] 3.1 Stripe account, Checkout for Plus, webhook -> tier (test mode).
