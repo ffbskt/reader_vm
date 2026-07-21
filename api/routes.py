@@ -167,10 +167,13 @@ def latest_job(book: str = Query(...),
 
 @router.get("/books/{slug}/reader", tags=["reader"])
 def reader_data(slug: str, level: int = 0, baseline: bool = False,
+                langs: str = "en,ru",
                 user: dict = Depends(get_current_user)):
-    """Simplified pages at one level + the merged hover dictionary."""
+    """Simplified pages + hover dictionary in the requested help languages
+    (comma-separated, e.g. langs=fr or langs=en,ru)."""
+    want = [l.strip() for l in langs.split(",") if l.strip()][:2] or ["en"]
     try:
-        return pipeline.reader_payload(slug, level, baseline)
+        return pipeline.reader_payload(slug, level, baseline, want)
     except FileNotFoundError:
         raise HTTPException(404, f"book {slug!r} not found")
 

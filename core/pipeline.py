@@ -982,8 +982,9 @@ def fill_missing_translations(slug):
 # --------------------------------------------------------------------------
 # reader payload: simplified pages + merged hover dictionary
 # --------------------------------------------------------------------------
-def reader_payload(slug, level, baseline=False):
+def reader_payload(slug, level, baseline=False, langs=None):
     from core.vocab import load_dictionary
+    langs = langs or ["en", "ru"]
     slug = _slug(slug)
     meta = json.load(open(os.path.join(book_dir(slug), "meta.json"),
                           encoding="utf-8"))
@@ -993,9 +994,18 @@ def reader_payload(slug, level, baseline=False):
                                       encoding="utf-8")))
     # hover dictionary: vocab from EVERY cached page at EVERY level of this
     # book + the book's gap-fill word_dict, so translations collected once
-    # help everywhere
+    # help everywhere. Merge PER LANGUAGE, then narrow to requested langs.
     dictionary = load_dictionary(_all_cached_results(slug) or results)
-    dictionary.update(_book_word_dict(slug))
+    for k, v in _book_word_dict(slug).items():
+        if isinstance(v, dict):
+            slot = dictionary.setdefault(k, {})
+            for lang, val in v.items():
+                if val and lang not in slot:
+                    slot[lang] = val
+    filtered = {}
+    for k, v in dictionary.items():
+        sub = {l: v[l] for l in langs if l in v}
+        if sub:
+            filtered[k] = sub
     return {"title": meta["title"], "slug": slug, "level": level,
-            "dictionary": dictionary,
-            "pages": results}
+            "langs": langs, "dictionary": filtered, "pages": results}

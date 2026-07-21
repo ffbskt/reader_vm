@@ -15,19 +15,30 @@ FOLD = str.maketrans("áéíóúñü", "aeiounu")
 def fold(w):
     return w.lower().translate(FOLD)
 
+# help languages a translation entry may carry (the book's own language is
+# never a help language, so no self-translation)
+HELP_LANGS = ("en", "ru", "fr", "es", "de", "it")
+
 def load_dictionary(pages_results):
-    """folded es -> {en, ru}; page-vocab translations win, bulk dict fills."""
+    """folded source word -> {lang: translation}. Merges PER LANGUAGE so a
+    word with page-vocab en/ru still gains fr/… from the bulk word_dict."""
     d = {}
+    def merge(k, trans):
+        if not k:
+            return
+        slot = d.setdefault(k, {})
+        for lang, val in trans.items():
+            if lang in HELP_LANGS and val and lang not in slot:
+                slot[lang] = str(val).strip()
     for r in pages_results:
         for v in r.get("vocab", []):
-            es = str(v.get("es", "")).strip()
-            if es and v.get("en") and v.get("ru"):
-                d.setdefault(fold(es), {"en": str(v["en"]).strip(),
-                                        "ru": str(v["ru"]).strip()})
+            # page vocab's "es" field is the SOURCE word, not a translation
+            merge(fold(str(v.get("es", "")).strip()),
+                  {l: v.get(l) for l in HELP_LANGS if l != "es"})
     wd = os.path.join(ROOT, "data", "word_dict.json")
     if os.path.exists(wd):
         for k, v in json.load(open(wd, encoding="utf-8")).items():
-            d.setdefault(k, v)
+            merge(k, v if isinstance(v, dict) else {})
     return d
 
 # attached object pronouns: consolarle, dimelo, matarse...
@@ -43,9 +54,10 @@ VERB_ENDS = sorted(
      "iste asen ase iesen iese emos imos amos ais eis an en es as os a e o "
      "i n s").split(), key=len, reverse=True)
 
-def lookup(dictionary, word):
+def lookup(dictionary, word, langs=None):
     """Find a translation for an (inflected) word: exact, minus attached
-    pronouns, plural, or conjugated verb mapped back to its infinitive."""
+    pronouns, plural, or conjugated verb mapped back to its infinitive.
+    Returns {lang: translation}; `langs` (list) narrows to those languages."""
     def rec(k, depth):
         if k in dictionary:
             return dictionary[k]
@@ -72,7 +84,10 @@ def lookup(dictionary, word):
                         if st + inf in dictionary:
                             return dictionary[st + inf]
         return None
-    return rec(fold(word), 0)
+    r = rec(fold(word), 0)
+    if r and langs:
+        r = {l: r[l] for l in langs if l in r} or None
+    return r
 
 MODES = {
     "repeat":   "every page lists ALL its unknown words, repeats underlined",
