@@ -186,9 +186,11 @@ class VocabReq(BaseModel):
 
 @router.get("/vocab", tags=["vocab"])
 def get_vocab(lang: str, user: dict = Depends(get_current_user)):
-    """Counts + the learning list (words the user is still mastering)."""
+    """Counts + the learning list, and the known set (so the reader can mark
+    each word by the user's own state)."""
     return {"lang": lang, "counts": db.vocab_counts(user["id"], lang),
-            "learning": db.vocab_words(user["id"], lang, "learning")}
+            "learning": db.vocab_words(user["id"], lang, "learning"),
+            "known": db.vocab_words(user["id"], lang, "known")}
 
 @router.post("/vocab", tags=["vocab"])
 def add_vocab(req: VocabReq, user: dict = Depends(get_current_user)):

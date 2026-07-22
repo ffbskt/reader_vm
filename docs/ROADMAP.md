@@ -382,11 +382,12 @@ coverage rises as the vocabulary grows.
       (re-adding as learning never demotes). 4 tests (add/promote/isolation/
       sticky). Deployed + verified live.
       **Check:** PASSED.
-- [ ] 2g.2 Frequency starter sets per language (es/en/ru): build top-~1500
-      lists from the featured corpus; POST /vocab/starter?lang adopts them as
-      `known` in one call.
-      **Check:** adopt es starter -> ~1500 known words; Celestina coverage
-      jumps to ~the textbook level.
+- [x] 2g.2 DONE 2026-07-22: build_starter_lists() -> SITE/starter/<lang>.json
+      (top-1500 by frequency across each language's books, names excluded;
+      es/en/fr/it built, ru pending books). GET /vocab/starter?lang (size),
+      POST /vocab/starter?lang (adopt all as known in one call).
+      **Check:** PASSED live — adopt es -> 1500 known; those alone cover 69%
+      of La Celestina tokens (0 -> reads most of a classic instantly).
 - [ ] 2g.3 Reader tap-to-learn. reader_site fetches the user's vocab and
       marks each word known / learning / unknown distinctly; tapping an
       unknown/learning word adds it to `learning` (POST /vocab) and updates

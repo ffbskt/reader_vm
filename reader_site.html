@@ -39,6 +39,7 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
 .line b.sp{font-family:system-ui,sans-serif;font-size:.85em;letter-spacing:.03em}
 .w{cursor:pointer;border-radius:3px}
 .w.unk{background:var(--unk-bg);color:var(--unk)}
+.w.learning{border-bottom:2px solid var(--accent);color:var(--ink)}
 .w:hover{outline:2px solid var(--accent)}
 #tip{position:fixed;background:var(--ink);color:var(--bg);border-radius:6px;
   padding:6px 12px;font:14px/1.4 system-ui,sans-serif;pointer-events:none;
@@ -109,12 +110,19 @@ function lookup(dict, w){
   return rec(fold(w), 0);
 }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+// personal vocabulary (2g): the user's own known/learning words drive marking
+const myVocab = {lang: '', known: new Set(), learning: new Set()};
 function wrapWords(text, unkSet, dict){
   return esc(text).replace(WORD_RX, w => {
-    const isUnk = unkSet.has(fold(w));
+    const k = fold(w);
     const tr = lookup(dict, w);
-    if (!tr && !isUnk) return w;
-    return `<span class="w ${isUnk ? 'unk' : ''}" data-t="${trText(tr)}">${w}</span>`;
+    if (myVocab.known.has(k))                       // mastered: plain
+      return w;
+    const learning = myVocab.learning.has(k);
+    const isUnk = learning || unkSet.has(k) || !!tr;
+    if (!isUnk) return w;
+    const cls = learning ? 'w learning' : 'w unk';
+    return `<span class="${cls}" data-w="${k}" data-t="${trText(tr)}">${w}</span>`;
   });
 }
 function render(){
@@ -165,6 +173,17 @@ function attachTips(){
       tip.style.top = (r.bottom + 6) + 'px';
     };
     el.onmouseleave = () => tip.style.display = 'none';
+    // tap-to-learn: click an unknown word -> add it to my vocabulary
+    el.onclick = () => {
+      const k = el.dataset.w;
+      if (!k || myVocab.known.has(k)) return;
+      myVocab.learning.add(k);
+      document.querySelectorAll(`.w[data-w="${k}"]`)
+        .forEach(x => x.className = 'w learning');
+      fetch('/vocab', {method: 'POST', headers: {...authHeaders(),
+        'Content-Type': 'application/json'},
+        body: JSON.stringify({lang: myVocab.lang, words: [k]})});
+    };
   });
 }
 document.getElementById('prev').onclick = () => { cur--; render(); scrollTo(0,0); };
@@ -190,6 +209,15 @@ const authHeaders = () => localStorage.getItem('jwt') ?
      level ${l}${base ? ' (generic)' : ''} · ${dp[l] || 0} p.</option>`).join('');
   document.getElementById('lv').onchange = e =>
     location.href = `reader_site.html?book=${book}&level=${e.target.value}${bq}`;
+
+  // personal vocabulary for THIS book's language drives word marking
+  myVocab.lang = (b && b.lang) || 'es';
+  try {
+    const v = await fetch(`/vocab?lang=${myVocab.lang}`, {headers: authHeaders()})
+      .then(r => r.json());
+    myVocab.known = new Set(v.known || []);
+    myVocab.learning = new Set(v.learning || []);
+  } catch (e) {}
 
   const r = await fetch(`/books/${book}/reader?level=${level}${bq}`,
                         {headers: authHeaders()});
