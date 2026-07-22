@@ -401,9 +401,12 @@ coverage rises as the vocabulary grows.
       the text; wrong shakes.
       **Check:** PASSED live-local — matched 5/5, "5 words learned",
       counts known 5 / learning 0.
-- [ ] 2g.5 Vocab stats + growth. Header/step shows vocabulary size per
-      language and "N new words to learn in this book".
-      **Check:** size grows across a reading+game session.
+- [x] 2g.5 DONE 2026-07-22: language bar shows "📚 You know N words · <lang>"
+      with a one-tap "Start with 1500 common words" button (adopts the
+      starter set) when known < 500; selecting a book shows "N new words to
+      learn (known/types)" via GET /books/{slug}/vocabgap. i18n en/es/ru.
+      **Check:** PASSED live on VM — Celestina gap 11,395 new -> adopt
+      starter -> 1,274 known / 10,121 new. PHASE 2g COMPLETE.
 
 ## Phase 3 — payments
 
