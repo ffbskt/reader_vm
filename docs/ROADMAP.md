@@ -339,11 +339,15 @@ Proposed picks (all public domain; confirm before bulk translate):
       the "almost no text" guard and have no hover vocab.
       **Check:** a Russian TXT -> baseline L0 page has >20 tokens, readable
       output, hover vocab non-empty; Spanish/English behaviour unchanged.
-- [ ] 2f.2 Download + add the 9 books (script), record difficulty in
-      featured.json ({slug, hash, title, lang, level: easy|medium|hard}).
-      Hide fr/it/de from featured.
-      **Check:** /books shows only en/es/ru featured, each with a difficulty
-      badge; fr/it books gone from the shelf.
+- [x] 2f.2 EN+ES done 2026-07-22: fetch_catalogue.py pulled P&P (#1342),
+      Tale of Two Cities (#98), Fábulas (#55206), Bécquer Obras escogidas
+      (#53552), Don Quijote (#2000) into the shared library; featured.json
+      rebuilt as the 3-per-language shelf with level easy|medium|hard +
+      nice titles. Grimm/Andersen/La Fontaine/Pinocchio no longer featured
+      (still in library). Card badge shows lang · level. RU 3 books pending
+      (need 2f.1 tokenizer).
+      **Check:** PASSED — fresh user sees exactly 7 (3 EN + 4 ES incl.
+      Celestina); fr/it hidden; badges show difficulty.
 - [ ] 2f.3 Autonomous baseline L0 translation of the catalogue (trickle,
       80/day budget) + fill es/ru/en dictionaries for each (2e.2b) so hovers
       work in every focus language. Samples teaser refreshed per language.
