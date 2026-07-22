@@ -388,16 +388,19 @@ coverage rises as the vocabulary grows.
       POST /vocab/starter?lang (adopt all as known in one call).
       **Check:** PASSED live — adopt es -> 1500 known; those alone cover 69%
       of La Celestina tokens (0 -> reads most of a classic instantly).
-- [ ] 2g.3 Reader tap-to-learn. reader_site fetches the user's vocab and
-      marks each word known / learning / unknown distinctly; tapping an
-      unknown/learning word adds it to `learning` (POST /vocab) and updates
-      live. Personal marking, no re-translation.
-      **Check:** tap a word -> it joins learning + restyles; reload keeps it.
-- [ ] 2g.4 Review game (Duolingo-style 5×5 match). GET /vocab/quiz?lang ->
-      N learning words + shuffled translations; the UI matches word↔meaning;
-      correct pairs POST /vocab/promote -> `known` and leave the set.
-      **Check:** play a round, correct matches move learning->known and drop
-      out of the reader's highlights.
+- [x] 2g.3 DONE 2026-07-22: reader loads the user's vocab for the book's
+      language; wrapWords marks known (plain) / learning (accent underline) /
+      unknown (highlight) by personal state; clicking a word adds it to
+      `learning` (POST /vocab), restyles live, and persists.
+      **Check:** PASSED live-local — tapped "animal" -> learning + saved;
+      known words render plain.
+- [x] 2g.4 DONE 2026-07-22: review game. GET /vocab/quiz?lang&book -> up to
+      N learning words + their translations (from the book's shared dict) +
+      shuffled answers. Reader "🎯 review (N)" button opens a match panel;
+      correct pairs POST /vocab/promote -> known, restyle the word plain in
+      the text; wrong shakes.
+      **Check:** PASSED live-local — matched 5/5, "5 words learned",
+      counts known 5 / learning 0.
 - [ ] 2g.5 Vocab stats + growth. Header/step shows vocabulary size per
       language and "N new words to learn in this book".
       **Check:** size grows across a reading+game session.
