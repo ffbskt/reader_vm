@@ -416,8 +416,13 @@ coverage rises as the vocabulary grows.
       baseline shown distinctly). The user's last-read position ("continue")
       is a SEPARATE marker, not part of the grid. Lives on the book card /
       book detail so translated parts are visibly "attached to the book".
-      **Check:** translate a range -> those cells fill; continue marker
-      points at the last page read; nothing re-translated (cache honoured).
+      UX (user 2026-07-22): the 4 level rows render as CARDS partly stacked
+      BEHIND each other (fanned/overlapping); on hover a card expands to full
+      and reveals its level + the page numbers translated. Replaces the flat
+      step-3 level cards for a chosen book.
+      **Check:** translate a range -> those cells fill; hover a level card ->
+      it expands showing level + page numbers; continue marker points at the
+      last page read; nothing re-translated (cache honoured).
 - [ ] 2h.2 Fully translate the wizard UI (all hints + buttons + job/among
       messages), not just titles — some hints still English in es/ru.
       **Check:** switch UI to es/ru -> no English left in the wizard chrome.

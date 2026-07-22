@@ -52,8 +52,9 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
 .vocab .rep b{color:var(--muted);text-decoration:underline}
 .empty{font-family:system-ui,sans-serif;color:var(--muted);text-align:center;
   margin-top:60px}
-#game{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;
-  align-items:center;justify-content:center;z-index:50}
+#game{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;
+  align-items:center;justify-content:center}
+#game:not([hidden]){display:flex}   /* [hidden] must win -> display:none */
 .gcard{background:var(--panel);border-radius:14px;padding:20px 22px;
   width:min(460px,92vw);font-family:system-ui,sans-serif}
 .ghead{display:flex;justify-content:space-between;align-items:center;
@@ -271,9 +272,13 @@ async function openGame(){
   });
   g.hidden = false;
 }
+const closeGame = () => document.getElementById('game').hidden = true;
 document.getElementById('reviewBtn').onclick = openGame;
-document.getElementById('gClose').onclick = () =>
-  document.getElementById('game').hidden = true;
+document.getElementById('gClose').onclick = closeGame;
+document.getElementById('game').onclick = e => {   // click backdrop to close
+  if (e.target.id === 'game') closeGame();
+};
+addEventListener('keydown', e => { if (e.key === 'Escape') closeGame(); });
 
 document.getElementById('prev').onclick = () => { cur--; render(); scrollTo(0,0); };
 document.getElementById('next').onclick = () => { cur++; render(); scrollTo(0,0); };
