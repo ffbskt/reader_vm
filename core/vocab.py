@@ -10,7 +10,9 @@ dictionary, capped (default 10), most frequent first.
 import os, json
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FOLD = str.maketrans("áéíóúñü", "aeiounu")
+# Spanish accents -> plain; Russian ё -> е (unify spelling). Cyrillic is
+# otherwise left as-is and only lower-cased. Keep in sync with analyze.fold.
+FOLD = str.maketrans("áéíóúñüёЁ", "aeiounuее")
 
 def fold(w):
     return w.lower().translate(FOLD)

@@ -138,15 +138,22 @@ def clean_ocr(text):
 #    so tokens that are common English words are dropped from BOTH books
 #    (consistency keeps the coverage comparison fair).
 # --------------------------------------------------------------------------
-WORD_RE = re.compile(r"[a-záéíóúñüA-ZÁÉÍÓÚÑÜ]+")
+# Words: Latin (with the common accents of es/fr/it/de/pt) OR Cyrillic
+# (Russian, incl. ё). Apostrophes inside a word are kept (l', dell', it's).
+WORD_RE = re.compile(
+    r"[A-Za-zÀ-ÖØ-öø-ÿА-Яа-яЁё]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿА-Яа-яЁё]+)*")
 ES_CHARS = set("áéíóúñü")
+# any non-ASCII letter marks a word as "content" in its own alphabet
+NON_ASCII_LETTER = re.compile(r"[À-ÖØ-öø-ÿА-Яа-яЁё]")
+CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 
 # Book 1's PDF extraction dropped all diacritics (que, manana, espanol), the
-# Celestina OCR kept them -> match on accent-folded forms.
-FOLD = str.maketrans("áéíóúñü", "aeiounu")
+# Celestina OCR kept them -> match Spanish on accent-folded forms. Cyrillic
+# is left as-is (just lower-cased); ё -> е so the two spellings unify.
+FOLD = str.maketrans("áéíóúñüёЁ", "aeiounuее")
 
 def fold(w):
-    return w.translate(FOLD)
+    return w.translate(FOLD).lower()
 
 EN_COMMON = set("""
 the of and to in is that it you for on with as are this be or at from by an
@@ -240,7 +247,9 @@ entre hasta desde ni bien mal ahora aquí allí así pues entonces
 """.split())
 
 def classify_language(w, es_evidence=frozenset()):
-    """Word-level en/es call for the bilingual textbook."""
+    """Word-level language call (en/es/ru) for filtering vocabulary."""
+    if CYRILLIC.search(w):
+        return "ru"
     if any(c in ES_CHARS for c in w):
         return "es"
     if w in ES_STOP:
@@ -263,7 +272,9 @@ def language_profile(tokens):
 def is_counted(w):
     if len(w) < 2:
         return False
-    if any(c in ES_CHARS for c in w):
+    # a word in its own script (accented Latin or Cyrillic) is content;
+    # only plain-ASCII English function words are dropped
+    if NON_ASCII_LETTER.search(w):
         return True
     return w not in EN_COMMON
 
