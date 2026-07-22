@@ -67,8 +67,11 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
 
 <script>
 const qs = new URLSearchParams(location.search);
-const FOLD = {'á':'a','é':'e','í':'i','ó':'o','ú':'u','ñ':'n','ü':'u'};
-const fold = w => w.toLowerCase().replace(/[áéíóúñü]/g, c => FOLD[c]);
+const FOLD = {'á':'a','é':'e','í':'i','ó':'o','ú':'u','ñ':'n','ü':'u','ё':'е'};
+const fold = w => w.toLowerCase().replace(/[áéíóúñüё]/g, c => FOLD[c]);
+// Latin (with accents) OR Cyrillic word
+const WORD_RX = /[A-Za-zÀ-ÖØ-öø-ÿА-Яа-яЁё]+/g;
+const trText = tr => tr ? Object.values(tr).map(esc).join(' · ') : '';
 let data = null, cur = 0;
 
 const CLITICS = ['selos','selas','selo','sela','melo','mela','telo','tela',
@@ -107,12 +110,11 @@ function lookup(dict, w){
 }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function wrapWords(text, unkSet, dict){
-  return esc(text).replace(/[a-záéíóúñüA-ZÁÉÍÓÚÑÜ]+/g, w => {
+  return esc(text).replace(WORD_RX, w => {
     const isUnk = unkSet.has(fold(w));
     const tr = lookup(dict, w);
     if (!tr && !isUnk) return w;
-    const t = tr ? `${esc(tr.en)} · ${esc(tr.ru)}` : '';
-    return `<span class="w ${isUnk ? 'unk' : ''}" data-t="${t}">${w}</span>`;
+    return `<span class="w ${isUnk ? 'unk' : ''}" data-t="${trText(tr)}">${w}</span>`;
   });
 }
 function render(){
@@ -145,7 +147,7 @@ function render(){
     ${groups.map(g => `<p class="line">${g.sp ?
         `<b class="sp">${g.sp}.</b> — ` : ''}${wrapWords(g.parts.join(' '), unk, dict)}</p>`).join('')}
     ${vocab.length ? `<div class="vocab">${vocab.map(v =>
-      `<div class="${v.rep ? 'rep' : ''}"><b>${v.w}</b> – ${esc(v.tr.en)} – ${esc(v.tr.ru)}</div>`).join('')}</div>` : ''}
+      `<div class="${v.rep ? 'rep' : ''}"><b>${v.w}</b> – ${trText(v.tr)}</div>`).join('')}</div>` : ''}
   </div>`;
   document.getElementById('pageSel').value = cur;
   document.getElementById('prev').disabled = cur === 0;
@@ -175,7 +177,8 @@ const authHeaders = () => localStorage.getItem('jwt') ?
   const book = qs.get('book');
   const level = qs.get('level') || 0;
   const base = qs.get('baseline') ? 1 : 0;
-  const bq = base ? '&baseline=1' : '';
+  const langs = qs.get('langs') || 'en,ru';
+  const bq = (base ? '&baseline=1' : '') + '&langs=' + langs;
   // level switcher: every level of THIS book with its translated-page count,
   // so a level mix-up is visible instead of looking like lost pages
   const bl = await fetch('/books', {headers: authHeaders()})

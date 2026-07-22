@@ -275,47 +275,74 @@ def add_book(filename, blob):
             "reused": reused, "existing_translations": sum(done.values()),
             "done_pages": done}
 
+LANG_CODE = {"English": "en", "Spanish": "es", "Russian": "ru",
+             "French": "fr", "Italian": "it", "German": "de"}
+
+def _detect_lang(tokens):
+    c = Counter(classify_language(w) for w in tokens[:2000])
+    return c.most_common(1)[0][0] if c else "en"
+
+def _ensure_book_stats(lib):
+    """Cache word count + unique types + detected language in the book's
+    shared meta.json (computed once)."""
+    mp = os.path.join(lib, "meta.json")
+    meta = json.load(open(mp, encoding="utf-8"))
+    if "words" not in meta or "lang" not in meta:
+        try:
+            text = clean_ocr(open(os.path.join(lib, "book.txt"),
+                                  encoding="utf-8").read())
+        except OSError:
+            text = ""
+        toks = counted_words(text)
+        meta["words"] = len(toks)
+        meta["uniq"] = len({fold(w) for w in toks})
+        meta["lang"] = _detect_lang(toks)
+        json.dump(meta, open(mp, "w", encoding="utf-8"), ensure_ascii=False)
+    return meta
+
+def _book_item(slug, lib, m, feat):
+    """One /books entry. `feat` = its featured.json record or None. A book
+    is a DEFAULT (curated) book iff featured — even if the current user owns
+    the underlying upload; only non-featured uploads are 'my books'."""
+    item = {"slug": slug, "pages": m.get("pages", 0),
+            "words": m.get("words", 0), "uniq": m.get("uniq", 0),
+            "featured": bool(feat), "mine": not bool(feat),
+            "level": feat.get("level") if feat else None,
+            "lang": (LANG_CODE.get(feat["lang"], feat["lang"]) if feat
+                     else m.get("lang", "en")),
+            "title": (feat or {}).get("title", m.get("title", slug)),
+            "done_pages": {lv: len(cached_pages(slug, lv)) for lv in LEVELS},
+            "done_base": {lv: len(cached_pages(slug, lv, True))
+                          for lv in LEVELS}}
+    sd = os.path.join(lib, "simplified")
+    times = [os.path.getmtime(os.path.join(sd, f))
+             for f in os.listdir(sd)] if os.path.isdir(sd) else []
+    item["updated"] = max(times) if times else os.path.getmtime(
+        os.path.join(lib, "meta.json"))
+    return item
+
 def list_books():
-    out = []
+    feat = {f["slug"]: f for f in featured_books()}
+    out, owned = [], set()
     bd = books_dir()
     if os.path.isdir(bd):
         for slug in sorted(os.listdir(bd)):
             lib = book_dir(slug)
-            mp = os.path.join(lib, "meta.json")
-            if not os.path.exists(mp):
+            if not os.path.exists(os.path.join(lib, "meta.json")):
                 continue
-            ref = _read_ref(slug) or {}
-            m = json.load(open(mp, encoding="utf-8"))
-            item = {"slug": slug, "title": ref.get("title", m.get("title", slug)),
-                    "pages": m.get("pages", 0),
-                    "done_pages": {lv: len(cached_pages(slug, lv))
-                                   for lv in LEVELS},
-                    "done_base": {lv: len(cached_pages(slug, lv, True))
-                                  for lv in LEVELS}}
-            sd = os.path.join(lib, "simplified")
-            times = [os.path.getmtime(os.path.join(sd, f))
-                     for f in os.listdir(sd)] if os.path.isdir(sd) else []
-            item["updated"] = max(times) if times else os.path.getmtime(mp)
-            out.append(item)
-    # featured public books the user doesn't already own (read-only shelf)
-    owned = {b["slug"] for b in out}
-    for f in featured_books():
-        if f["slug"] in owned:
+            m = _ensure_book_stats(lib)
+            if not feat.get(slug):
+                r = _read_ref(slug)
+                if r and r.get("title"):
+                    m = {**m, "title": r["title"]}
+            out.append(_book_item(slug, lib, m, feat.get(slug)))
+            owned.add(slug)
+    for slug, f in feat.items():                     # featured, not owned
+        if slug in owned:
             continue
         lib = os.path.join(library_root(), f["hash"])
-        mp = os.path.join(lib, "meta.json")
-        if not os.path.exists(mp):
-            continue
-        m = json.load(open(mp, encoding="utf-8"))
-        out.append({"slug": f["slug"], "featured": True, "lang": f.get("lang"),
-                    "level": f.get("level"),
-                    "title": f.get("title", m.get("title", f["slug"])),
-                    "pages": m.get("pages", 0),
-                    "done_pages": {lv: len(cached_pages(f["slug"], lv))
-                                   for lv in LEVELS},
-                    "done_base": {lv: len(cached_pages(f["slug"], lv, True))
-                                  for lv in LEVELS},
-                    "updated": os.path.getmtime(mp)})
+        if os.path.exists(os.path.join(lib, "meta.json")):
+            out.append(_book_item(slug, lib, _ensure_book_stats(lib), f))
     return out
 
 def reading_samples(max_pairs=2):

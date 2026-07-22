@@ -104,21 +104,37 @@ a.readlink{color:var(--accent);font-weight:600}
 /* auth: right-aligned row of third-party sign-in buttons */
 #auth{text-align:right}
 #auth>div{display:inline-block;vertical-align:middle;margin-left:10px}
+/* language bar */
+.langbar{background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:14px 18px;margin:0 0 18px;font-size:1.02rem;
+  line-height:2.1}
+.langbar select{font:inherit;font-weight:600;color:var(--accent);
+  background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  padding:3px 8px;margin:0 3px;cursor:pointer}
+.langbar .muted{color:var(--muted);font-weight:400}
+#help2Wrap.off{display:none}
+.addlang{background:none;border:1px dashed var(--line);color:var(--muted);
+  border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit;margin-left:3px}
+.addlang:hover{border-color:var(--accent);color:var(--accent)}
+.booksec h3{font-size:1rem;margin:16px 0 4px}
+.bcard .wc{font-size:.72rem;color:var(--muted);display:block;margin-top:2px}
 </style>
 
 <div class="wrap">
 <div id="auth" style="font-size:.85rem;color:var(--muted);min-height:40px"></div>
-<h1>Text simplifier</h1>
-<p class="sub">You have a book you'd love to read in its original language —
-but it's still too hard. Give the app something simple you already
-understand (a textbook, a graded reader, or just a word list), and it
-rewrites your hard book using <b>only words you know</b>, keeping every word
-you don't as a hover translation. Read it online or as a PDF, at the
-difficulty you choose.</p>
-<p class="sub" style="margin-top:-14px">
-  📱 Prefer chat? <a class="readlink" href="https://t.me/ffbskt_reader_bot"
-  target="_blank">Open the Telegram bot</a> — send it a book, get it back
-  simplified.</p>
+<h1 id="h1title">Reader</h1>
+<div class="langbar" id="langbar">
+  <span class="muted" data-t="iread">I read in</span>
+  <select id="readLang"></select>
+  <span class="muted" data-t="withtr">, with translation to</span>
+  <select id="help1"></select>
+  <span id="help2Wrap" class="off"><span class="muted" data-t="and">and</span>
+    <select id="help2"></select></span>
+  <button class="addlang" id="addLang" data-t="addlang">＋ add</button>
+  <span class="muted" data-t="menuis">. Menu:</span>
+  <select id="uiLang"></select>
+</div>
+<p class="sub" id="introLine"></p>
 
 <!-- continue reading: recent books, one tap to the reader -->
 <div class="step" id="contBox" style="display:none">
@@ -147,7 +163,11 @@ difficulty you choose.</p>
   <input type="file" id="bookFile" accept=".pdf,.txt" hidden>
   <button class="btn" id="bookUp">＋ Upload a new book</button>
   <span id="bookMsg" class="err"></span>
-  <div class="bookcards" id="bookCards"></div>
+  <div class="booksec"><h3 data-t="mybooks">My books</h3>
+    <div class="bookcards" id="myBooks"></div></div>
+  <div class="booksec"><h3 data-t="defaultbooks">Library</h3>
+    <div class="bookcards" id="defaultBooks"></div></div>
+  <div class="bookcards" id="bookCards" style="display:none"></div>
   <div id="stats" style="display:none">
     <div class="tiles">
       <div class="tile"><b id="stCov"></b><span>token coverage</span></div>
@@ -224,6 +244,63 @@ const api = (path, opts = {}) => fetch(path,
     if (!r.ok) d.error = d.error || d.detail || ('HTTP ' + r.status);
     return d;
   });
+
+// ---- language bar + i18n (2e.5/2e.6) ----
+const LANGS = {en: 'English', es: 'Español', ru: 'Русский'};
+const I18N = {
+  en: {iread:'I read in', withtr:', with translation to', and:'and',
+    addlang:'＋ add', menuis:'. Menu:', mybooks:'My books',
+    defaultbooks:'Library', intro:'Pick a book below and read it simplified '
+      + 'to your level, every hard word translated on hover.',
+    words:'words', ready:'ready', notr:'not translated'},
+  es: {iread:'Leo en', withtr:', con traducción a', and:'y', addlang:'＋ añadir',
+    menuis:'. Menú:', mybooks:'Mis libros', defaultbooks:'Biblioteca',
+    intro:'Elige un libro y léelo simplificado a tu nivel, cada palabra '
+      + 'difícil traducida al pasar el ratón.',
+    words:'palabras', ready:'listas', notr:'sin traducir'},
+  ru: {iread:'Читаю на', withtr:', с переводом на', and:'и', addlang:'＋ добавить',
+    menuis:'. Меню:', mybooks:'Мои книги', defaultbooks:'Библиотека',
+    intro:'Выберите книгу и читайте её упрощённой под ваш уровень — каждое '
+      + 'трудное слово переводится по наведению.',
+    words:'слов', ready:'готово', notr:'не переведено'}};
+const lang = JSON.parse(localStorage.getItem('lang') ||
+  '{"read":"es","help1":"en","help2":"","ui":"en"}');
+const t = k => (I18N[lang.ui] || I18N.en)[k] || I18N.en[k] || k;
+function saveLang(){ localStorage.setItem('lang', JSON.stringify(lang)); }
+function opts(sel, cur, exclude){
+  sel.innerHTML = Object.entries(LANGS)
+    .filter(([c]) => !exclude || !exclude.includes(c))
+    .map(([c, n]) => `<option value="${c}" ${c === cur ? 'selected' : ''}>`
+      + `${n}</option>`).join('');
+}
+function applyI18n(){
+  document.querySelectorAll('[data-t]').forEach(e =>
+    e.textContent = t(e.dataset.t));
+  $('introLine').textContent = t('intro');
+  document.documentElement.lang = lang.ui;
+}
+function helpLangs(){ return [lang.help1, lang.help2].filter(Boolean); }
+function initLangBar(){
+  opts($('readLang'), lang.read);
+  opts($('help1'), lang.help1, [lang.read]);
+  opts($('uiLang'), lang.ui);
+  $('help2Wrap').classList.toggle('off', !lang.help2);
+  $('addLang').style.display = lang.help2 ? 'none' : '';
+  if (lang.help2) opts($('help2'), lang.help2, [lang.read, lang.help1]);
+  applyI18n();
+  $('readLang').onchange = e => { lang.read = e.target.value;
+    if (lang.help1 === lang.read) lang.help1 = lang.read === 'en' ? 'es' : 'en';
+    saveLang(); initLangBar(); refreshBooks(); };
+  $('help1').onchange = e => { lang.help1 = e.target.value; saveLang();
+    initLangBar(); if (book) updateReadPdf(); };
+  $('addLang').onclick = () => { lang.help2 =
+    Object.keys(LANGS).find(c => c !== lang.read && c !== lang.help1);
+    saveLang(); initLangBar(); if (book) updateReadPdf(); };
+  $('help2').onchange = e => { lang.help2 = e.target.value; saveLang();
+    if (book) updateReadPdf(); };
+  $('uiLang').onchange = e => { lang.ui = e.target.value; saveLang();
+    applyI18n(); refreshBooks(); };
+}
 
 // ---- sign-in: Google + Telegram (2b.1) ----
 async function showSamples(){
@@ -369,48 +446,62 @@ $('knownFile').onchange = async () => {
 const bestLevel = dp => [75, 50, 25, 0].reduce((best, l) =>
   (dp[l] || 0) > (dp[best] || 0) ? l : best, 0);
 
+const readerHref = (slug, lv) =>
+  `reader_site.html?book=${slug}&level=${lv}&langs=${helpLangs().join(',')}`;
+
+function bookCard(b){
+  const base = Object.values(b.done_base || {}).reduce((a, n) => a + n, 0);
+  const total = Object.values(b.done_pages).reduce((a, n) => a + n, 0) + base;
+  const badge = b.level
+    ? `<span class="feat">★ ${b.level}</span>` : '';
+  const del = b.mine ?
+    `<button class="bcard-del" data-s="${b.slug}" title="remove"
+      aria-label="remove ${b.title}">✕</button>` : '';
+  return `<div class="bcard ${b.slug === book ? 'on' : ''}" data-s="${b.slug}">
+    <button class="bcard-pick" data-s="${b.slug}"><b>${b.title}</b>${badge}
+    <span class="wc">${(b.uniq || 0).toLocaleString()} ${t('words')} · `
+    + `${b.pages} p.</span>
+    <span>${total ? total + ' p. ' + t('ready') : t('notr')}</span>
+    </button>${del}</div>`;
+}
+
 async function refreshBooks(sel){
   const d = await api('/books');
-  const books = d.books || [];
-  $('bookCards').innerHTML = books.map(b => {
-    const base = Object.values(b.done_base || {}).reduce((a, n) => a + n, 0);
-    const total = Object.values(b.done_pages).reduce((a, n) => a + n, 0) + base;
-    const badge = b.featured
-      ? `<span class="feat">★ ${b.lang || ''}${b.level ? ' · ' + b.level : ''}</span>`
-      : '';
-    const del = b.featured ? '' :
-      `<button class="bcard-del" data-s="${b.slug}" title="remove from my library"
-        aria-label="remove ${b.title}">✕</button>`;
-    return `<div class="bcard ${b.slug === book ? 'on' : ''}" data-s="${b.slug}">
-      <button class="bcard-pick" data-s="${b.slug}"><b>${b.title}</b>${badge}
-      <span>${b.pages} pages · ${total ? total + ' p. ready'
-        : 'not translated yet'}</span></button>${del}</div>`;
-  }).join('') || '<span class="jobline">no books yet — upload one above</span>';
-  document.querySelectorAll('#bookCards .bcard-pick').forEach(c =>
-    c.onclick = () => selectBook(c.dataset.s));
-  document.querySelectorAll('#bookCards .bcard-del').forEach(c =>
-    c.onclick = async e => {
-      e.stopPropagation();
-      if (!confirm('Remove this book from your library? '
-          + '(other readers keep their copy)')) return;
-      await api('/books/' + c.dataset.s, {method: 'DELETE'});
-      if (book === c.dataset.s){ book = null;
-        ['s3','s4','s5','s6'].forEach(id => $(id).classList.add('dis'));
-        $('stats').style.display = 'none'; }
-      refreshBooks();
-    });
+  const all = (d.books || []).filter(b => b.lang === lang.read);
+  const mine = all.filter(b => b.mine), lib = all.filter(b => !b.mine);
+  const wire = host => {
+    host.querySelectorAll('.bcard-pick').forEach(c =>
+      c.onclick = () => selectBook(c.dataset.s));
+    host.querySelectorAll('.bcard-del').forEach(c =>
+      c.onclick = async e => {
+        e.stopPropagation();
+        if (!confirm('Remove this book from your library?')) return;
+        await api('/books/' + c.dataset.s, {method: 'DELETE'});
+        if (book === c.dataset.s){ book = null;
+          ['s3','s4','s5','s6'].forEach(id => $(id).classList.add('dis'));
+          $('stats').style.display = 'none'; }
+        refreshBooks();
+      });
+  };
+  $('myBooks').innerHTML = mine.map(bookCard).join('')
+    || `<span class="jobline">— (${t('notr')})</span>`;
+  $('defaultBooks').innerHTML = lib.map(bookCard).join('')
+    || '<span class="jobline">—</span>';
+  wire($('myBooks')); wire($('defaultBooks'));
 
-  // continue reading: 3 most recently translated books, one tap to read
-  const readable = books.filter(b =>
-    Object.values(b.done_pages).some(n => n))
+  // continue reading: recent readable books in the reading language
+  const readable = all.filter(b =>
+    Object.values(b.done_pages).some(n => n) ||
+    Object.values(b.done_base || {}).some(n => n))
     .sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 3);
   $('contBox').style.display = readable.length ? '' : 'none';
   $('contList').innerHTML = readable.map(b => {
-    const lv = bestLevel(b.done_pages);
-    return `<button class="bcard" onclick="location.href=
-      'reader_site.html?book=${b.slug}&level=${lv}'">
-      <b>${b.title}</b><span>level ${lv} · ${b.done_pages[lv]} pages ready</span>
-      <span class="go">continue reading →</span></button>`;
+    const dp = {...b.done_pages}; Object.entries(b.done_base || {})
+      .forEach(([l, n]) => { if (n) dp[l] = Math.max(dp[l] || 0, n); });
+    const lv = bestLevel(dp);
+    return `<button class="bcard" onclick="location.href='${readerHref(b.slug, lv)}'">
+      <b>${b.title}</b><span>${dp[lv]} p. ${t('ready')}</span>
+      <span class="go">→</span></button>`;
   }).join('');
   if (sel) selectBook(sel);
 }
@@ -523,7 +614,7 @@ async function updateReadPdf(){
   const d = await api('/books');
   const b = d.books.find(x => x.slug === book);
   const dp = (b && (isBase() ? b.done_base : b.done_pages)) || {};
-  const bq = isBase() ? '&baseline=1' : '';
+  const bq = (isBase() ? '&baseline=1' : '') + '&langs=' + helpLangs().join(',');
   const n = dp[level] || 0;
   $('readLink').href = `reader_site.html?book=${book}&level=${level}${bq}`;
   const shelves = [0, 25, 50, 75].filter(l => dp[l]).map(l =>
@@ -582,7 +673,7 @@ $('goPdf').onclick = async () => {
 };
 
 (async () => {
-  renderLevels(); renderPdfModes();
+  initLangBar(); renderLevels(); renderPdfModes();
   const canUse = await initAuth();          // false = login required, not in
   if (canUse){ refreshKnown(); refreshBooks(); }
 })();
