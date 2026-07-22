@@ -242,7 +242,10 @@ words are translated into it on hover (reader AND public teaser). One primary
 UI (menu, labels) switches to the primary language too. A language bar sits
 always on top.
 
-Languages (start): en, ru, fr, es (user choice 2026-07-21). More later.
+Languages: **en, es, ru ONLY** (user decision 2026-07-22). fr/it/de books
+stay in the library but are HIDDEN (not featured, not offered). UI + reading
++ help languages are these three. "Add language" = one extra help language
+slot only (max 2: primary + 1), so the picker is trivial.
 
 **Core design — reading language ⟂ help language(s).**
 - The book's SIMPLIFIED TEXT is language-independent of help language, so the
@@ -297,13 +300,14 @@ polysemy/idioms need meaning-aware translation).**
       langs. users row gains ui_lang, help_langs; GET/PUT /me/languages.
       **Check:** reader?langs=fr and ?langs=en,ru return the right dicts;
       choice persists across sessions.
-- [ ] 2e.5 UI i18n. Static strings.json for en/ru/fr/es (~40 keys). app.html
-      + reader_site.html render every label via t(key); English fallback.
-      **Check:** switch UI language -> all menu/labels change.
-- [ ] 2e.6 Language bar (always on top). primary-language select + "＋ add
-      second language" (max 2), persisted. Drives UI language, hover langs,
-      teaser, and the reader link.
-      **Check:** pick French -> UI + hovers French; add Russian -> both;
+- [ ] 2e.5 UI i18n. Static strings.json for en/es/ru only (~40 keys).
+      app.html + reader_site.html render every label via t(key); English
+      fallback.
+      **Check:** switch UI language among en/es/ru -> all labels change.
+- [ ] 2e.6 Language bar (always on top). primary-language select (en/es/ru)
+      + "＋ add language" (adds ONE more help language, max 2), persisted.
+      Drives UI language, hover langs, teaser, reader link.
+      **Check:** pick Spanish -> UI + hovers Spanish; add Russian -> both;
       reload keeps it.
 - [ ] 2e.7 Hover in reader + PUBLIC teaser. reader_site + the logged-out
       /samples teaser show 1-2 help languages per word (touch/hover) with the
@@ -311,6 +315,40 @@ polysemy/idioms need meaning-aware translation).**
       picker (default = browser language).
       **Check:** touch a word in teaser and reader -> correct translation(s)
       in the selected 1-2 languages.
+
+## Phase 2f — curated 3-language catalogue (EN / ES / RU) — user 2026-07-22
+
+Goal: a hand-picked shelf of 3 public-domain books per language at rising
+difficulty (easy / medium / hard). La Celestina stays as the user's own ES
+book. Non-focus languages (fr/it/de) hidden. Difficulty labelled per book.
+
+Proposed picks (all public domain; confirm before bulk translate):
+- **English**  easy: Alice in Wonderland (Carroll, have it) · medium:
+  Pride and Prejudice (Austen #1342) · hard: A Tale of Two Cities
+  (Dickens #98)
+- **Spanish**  easy: Fábulas (Samaniego) · medium: Leyendas (Bécquer) ·
+  hard: Don Quijote I (Cervantes) · [+ La Celestina, user's own]
+- **Russian**  easy: Повести Белкина (Pushkin) · medium: рассказы
+  (Chekhov) · hard: Записки из подполья (Dostoevsky). Source:
+  Gutenberg RU / ru.wikisource (verify plain-text download).
+
+- [ ] 2f.1 PREREQUISITE — Cyrillic + broader-Latin tokenizer (was 2d.3).
+      analyze.WORD_RE/fold/counted_words handle Cyrillic (а-я ё) and more
+      Latin accents (à è ê ç ä ö ß ì ò ù); fold leaves Cyrillic as-is;
+      classify_language gains a Cyrillic path. Without this, RU books fail
+      the "almost no text" guard and have no hover vocab.
+      **Check:** a Russian TXT -> baseline L0 page has >20 tokens, readable
+      output, hover vocab non-empty; Spanish/English behaviour unchanged.
+- [ ] 2f.2 Download + add the 9 books (script), record difficulty in
+      featured.json ({slug, hash, title, lang, level: easy|medium|hard}).
+      Hide fr/it/de from featured.
+      **Check:** /books shows only en/es/ru featured, each with a difficulty
+      badge; fr/it books gone from the shelf.
+- [ ] 2f.3 Autonomous baseline L0 translation of the catalogue (trickle,
+      80/day budget) + fill es/ru/en dictionaries for each (2e.2b) so hovers
+      work in every focus language. Samples teaser refreshed per language.
+      **Check:** each catalogue book readable at L0 with hover in all three
+      languages; background stays within budget.
 
 ## Phase 3 — payments
 
