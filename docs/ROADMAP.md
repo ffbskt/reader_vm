@@ -329,16 +329,21 @@ Proposed picks (all public domain; confirm before bulk translate):
 - **Spanish**  easy: Fábulas (Samaniego) · medium: Leyendas (Bécquer) ·
   hard: Don Quijote I (Cervantes) · [+ La Celestina, user's own]
 - **Russian**  easy: Повести Белкина (Pushkin) · medium: рассказы
-  (Chekhov) · hard: Записки из подполья (Dostoevsky). Source:
-  Gutenberg RU / ru.wikisource (verify plain-text download).
+  (Chekhov) · hard: Записки из подполья (Dostoevsky).
+  SOURCING NOTE (2026-07-22): Gutenberg has almost NO Russian originals
+  (mostly English translations); gutendex ru search empty. ru.wikisource
+  has everything but its extract API needs a User-Agent AND correct page
+  titles (works split into chapter subpages). 2f.2-RU = build a Wikisource
+  fetcher (action=parse or REST, walk chapter subpages, strip markup).
 
-- [ ] 2f.1 PREREQUISITE — Cyrillic + broader-Latin tokenizer (was 2d.3).
-      analyze.WORD_RE/fold/counted_words handle Cyrillic (а-я ё) and more
-      Latin accents (à è ê ç ä ö ß ì ò ù); fold leaves Cyrillic as-is;
-      classify_language gains a Cyrillic path. Without this, RU books fail
-      the "almost no text" guard and have no hover vocab.
-      **Check:** a Russian TXT -> baseline L0 page has >20 tokens, readable
-      output, hover vocab non-empty; Spanish/English behaviour unchanged.
+- [x] 2f.1 DONE 2026-07-22: Cyrillic + broader-Latin tokenizer. WORD_RE now
+      matches Latin-with-accents + Cyrillic (incl. apostrophes l'/dell');
+      fold maps ё->е and lower-cases (Cyrillic otherwise as-is);
+      is_counted uses NON_ASCII_LETTER; classify_language returns "ru" for
+      Cyrillic. 66 tests (Cyrillic tokenize, ё-fold, FR/DE accents, Spanish
+      unchanged). Deployed + PROVEN LIVE: a real Dostoevsky excerpt -> 1
+      baseline L0 page, 53 tokens, readable simplified Russian.
+      **Check:** PASSED.
 - [x] 2f.2 EN+ES done 2026-07-22: fetch_catalogue.py pulled P&P (#1342),
       Tale of Two Cities (#98), Fábulas (#55206), Bécquer Obras escogidas
       (#53552), Don Quijote (#2000) into the shared library; featured.json
