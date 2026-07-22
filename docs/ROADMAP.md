@@ -300,15 +300,19 @@ polysemy/idioms need meaning-aware translation).**
       langs. users row gains ui_lang, help_langs; GET/PUT /me/languages.
       **Check:** reader?langs=fr and ?langs=en,ru return the right dicts;
       choice persists across sessions.
-- [ ] 2e.5 UI i18n. Static strings.json for en/es/ru only (~40 keys).
-      app.html + reader_site.html render every label via t(key); English
-      fallback.
-      **Check:** switch UI language among en/es/ru -> all labels change.
-- [ ] 2e.6 Language bar (always on top). primary-language select (en/es/ru)
-      + "＋ add language" (adds ONE more help language, max 2), persisted.
-      Drives UI language, hover langs, teaser, reader link.
-      **Check:** pick Spanish -> UI + hovers Spanish; add Russian -> both;
-      reload keeps it.
+- [x] 2e.5 + 2e.6 DONE 2026-07-22: language bar as one sentence with 4
+      selects — "I read in [X], with translation to [Y] [+ add Z]. Menu [U]"
+      — i18n en/es/ru (I18N table + t(), persisted in localStorage.lang).
+      Reading language FILTERS the shelf (choose es -> only es books; fr/it
+      books drop out). Books split into "My books" (non-featured uploads)
+      vs "Library" (featured/default). Per-book word stats (unique types +
+      pages) on each card. reader_site reads ?langs= and shows the chosen
+      1-2 languages joined; word regex + fold now handle Cyrillic.
+      ALSO fixed: book language DETECTION (stopword-frequency detector; the
+      old classify_language defaulted everything to Spanish).
+      **Check:** PASSED — local: UI switch to RU relabels bar, read=en hides
+      Spanish books, reader link carries langs; VM: detector labels
+      en/es/fr/it correctly, My/Library split + word counts correct.
 - [ ] 2e.7 Hover in reader + PUBLIC teaser. reader_site + the logged-out
       /samples teaser show 1-2 help languages per word (touch/hover) with the
       Tier-2 "better translation" affordance; teaser gets a small language
