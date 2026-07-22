@@ -397,8 +397,8 @@ coverage rises as the vocabulary grows.
 - [x] 2g.4 DONE 2026-07-22: review game. GET /vocab/quiz?lang&book -> up to
       N learning words + their translations (from the book's shared dict) +
       shuffled answers. Reader "🎯 review (N)" button opens a match panel;
-      correct pairs POST /vocab/promote -> known, restyle the word plain in
-      the text; wrong shakes.
+      game now lives in a SEPARATE window (vocab.html), opened from the
+      reader button — no in-reader overlay. Correct pairs -> known.
       **Check:** PASSED live-local — matched 5/5, "5 words learned",
       counts known 5 / learning 0.
 - [x] 2g.5 DONE 2026-07-22: language bar shows "📚 You know N words · <lang>"
