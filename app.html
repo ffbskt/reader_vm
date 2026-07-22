@@ -118,6 +118,12 @@ a.readlink{color:var(--accent);font-weight:600}
 .addlang:hover{border-color:var(--accent);color:var(--accent)}
 .booksec h3{font-size:1rem;margin:16px 0 4px}
 .bcard .wc{font-size:.72rem;color:var(--muted);display:block;margin-top:2px}
+.vocabinfo{margin:-8px 0 18px;font-size:.95rem;color:var(--muted)}
+.vocabinfo b{color:var(--ink);font-variant-numeric:tabular-nums}
+.vocabinfo .adopt{margin-left:10px;background:var(--accent);
+  color:var(--accent-ink);border:none;border-radius:6px;padding:4px 12px;
+  cursor:pointer;font:inherit;font-size:.85rem}
+.vocabinfo .adopt:disabled{opacity:.5;cursor:wait}
 </style>
 
 <div class="wrap">
@@ -135,6 +141,7 @@ a.readlink{color:var(--accent);font-weight:600}
   <select id="uiLang"></select>
 </div>
 <p class="sub" id="introLine"></p>
+<div class="vocabinfo" id="vocabInfo"></div>
 
 <!-- continue reading: recent books, one tap to the reader -->
 <div class="step" id="contBox" style="display:none">
@@ -252,17 +259,23 @@ const I18N = {
     addlang:'＋ add', menuis:'. Menu:', mybooks:'My books',
     defaultbooks:'Library', intro:'Pick a book below and read it simplified '
       + 'to your level, every hard word translated on hover.',
-    words:'words', ready:'ready', notr:'not translated'},
+    words:'words', ready:'ready', notr:'not translated',
+    youknow:'You know', vwords:'words', adopt:'Start with 1500 common words',
+    newwords:'new words to learn in this book'},
   es: {iread:'Leo en', withtr:', con traducción a', and:'y', addlang:'＋ añadir',
     menuis:'. Menú:', mybooks:'Mis libros', defaultbooks:'Biblioteca',
     intro:'Elige un libro y léelo simplificado a tu nivel, cada palabra '
       + 'difícil traducida al pasar el ratón.',
-    words:'palabras', ready:'listas', notr:'sin traducir'},
+    words:'palabras', ready:'listas', notr:'sin traducir',
+    youknow:'Conoces', vwords:'palabras', adopt:'Empezar con 1500 palabras comunes',
+    newwords:'palabras nuevas por aprender en este libro'},
   ru: {iread:'Читаю на', withtr:', с переводом на', and:'и', addlang:'＋ добавить',
     menuis:'. Меню:', mybooks:'Мои книги', defaultbooks:'Библиотека',
     intro:'Выберите книгу и читайте её упрощённой под ваш уровень — каждое '
       + 'трудное слово переводится по наведению.',
-    words:'слов', ready:'готово', notr:'не переведено'}};
+    words:'слов', ready:'готово', notr:'не переведено',
+    youknow:'Вы знаете', vwords:'слов', adopt:'Начать с 1500 частых слов',
+    newwords:'новых слов в этой книге'}};
 const lang = JSON.parse(localStorage.getItem('lang') ||
   '{"read":"es","help1":"en","help2":"","ui":"en"}');
 const t = k => (I18N[lang.ui] || I18N.en)[k] || I18N.en[k] || k;
@@ -290,7 +303,7 @@ function initLangBar(){
   applyI18n();
   $('readLang').onchange = e => { lang.read = e.target.value;
     if (lang.help1 === lang.read) lang.help1 = lang.read === 'en' ? 'es' : 'en';
-    saveLang(); initLangBar(); refreshBooks(); };
+    saveLang(); initLangBar(); refreshBooks(); refreshVocab(); };
   $('help1').onchange = e => { lang.help1 = e.target.value; saveLang();
     initLangBar(); if (book) updateReadPdf(); };
   $('addLang').onclick = () => { lang.help2 =
@@ -299,7 +312,24 @@ function initLangBar(){
   $('help2').onchange = e => { lang.help2 = e.target.value; saveLang();
     if (book) updateReadPdf(); };
   $('uiLang').onchange = e => { lang.ui = e.target.value; saveLang();
-    applyI18n(); refreshBooks(); };
+    applyI18n(); refreshBooks(); refreshVocab(); };
+}
+// vocabulary size for the reading language + one-tap starter adoption
+async function refreshVocab(){
+  const v = await api(`/vocab?lang=${lang.read}`);
+  const known = (v.counts && v.counts.known) || 0;
+  const langName = LANGS[lang.read];
+  let html = `📚 ${t('youknow')} <b>${known.toLocaleString()}</b> `
+    + `${t('vwords')} · ${langName}`;
+  if (known < 500)
+    html += ` <button class="adopt" id="adoptBtn">${t('adopt')} →</button>`;
+  $('vocabInfo').innerHTML = html;
+  const btn = $('adoptBtn');
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = '…';
+    await api(`/vocab/starter?lang=${lang.read}`, {method: 'POST'});
+    refreshVocab(); if (book) loadStats();
+  };
 }
 
 // ---- sign-in: Google + Telegram (2b.1) ----
@@ -528,8 +558,14 @@ function selectBook(slug){
   if (book) loadStats();
 }
 async function loadStats(){
+  // personal "new words to learn" gap (works even without a textbook)
+  api(`/books/${book}/vocabgap`).then(g => {
+    if (g && !g.error) $('bookMsg').innerHTML =
+      `📖 <b>${g.new.toLocaleString()}</b> ${t('newwords')} `
+      + `<span style="color:var(--muted)">(${g.known}/${g.types} known)</span>`;
+  });
   const d = await api(`/books/${book}/stats`);
-  if (d.error) return $('bookMsg').textContent = d.error;
+  if (d.error){ $('stats').style.display = 'none'; return; }
   stats = d;
   $('stats').style.display = '';
   $('stCov').textContent = d.token_coverage + '%';
@@ -675,6 +711,6 @@ $('goPdf').onclick = async () => {
 (async () => {
   initLangBar(); renderLevels(); renderPdfModes();
   const canUse = await initAuth();          // false = login required, not in
-  if (canUse){ refreshKnown(); refreshBooks(); }
+  if (canUse){ refreshKnown(); refreshBooks(); refreshVocab(); }
 })();
 </script>

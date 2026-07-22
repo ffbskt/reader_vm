@@ -206,6 +206,19 @@ def promote_vocab(req: VocabReq, user: dict = Depends(get_current_user)):
     n = db.vocab_add(user["id"], req.lang, req.words[:2000], "known")
     return {"promoted": n, "counts": db.vocab_counts(user["id"], req.lang)}
 
+@router.get("/books/{slug}/vocabgap", tags=["vocab"])
+def vocab_gap(slug: str, user: dict = Depends(get_current_user)):
+    """How many of this book's word types the user already knows vs. how
+    many are NEW to learn."""
+    from core.vocab import fold
+    meta = pipeline._ensure_book_stats(pipeline.book_dir(slug))
+    lang = meta.get("lang", "en")
+    types = pipeline.book_word_types(slug)
+    have = {fold(w) for w in db.vocab_words(user["id"], lang, "known")}
+    known = len(types & have)
+    return {"lang": lang, "types": len(types), "known": known,
+            "new": len(types) - known}
+
 @router.get("/vocab/quiz", tags=["vocab"])
 def vocab_quiz(lang: str, book: str = "", n: int = 5,
                user: dict = Depends(get_current_user)):

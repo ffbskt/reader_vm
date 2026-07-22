@@ -510,6 +510,14 @@ def migrate_books_to_library():
                       open(os.path.join(d, "ref.json"), "w",
                            encoding="utf-8"), ensure_ascii=False)
 
+def book_word_types(slug):
+    """Set of folded word types in a book (for personal 'new words' gap)."""
+    bt = os.path.join(book_dir(slug), "book.txt")
+    if not os.path.exists(bt):
+        return set()
+    return {fold(w) for w in counted_words(
+        clean_ocr(open(bt, encoding="utf-8").read()))}
+
 def book_pages(slug):
     return load_pages(os.path.join(book_dir(slug), "book.txt"))
 
