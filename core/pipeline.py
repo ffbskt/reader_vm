@@ -366,6 +366,47 @@ def list_books():
             out.append(_book_item(slug, lib, _ensure_book_stats(lib), f))
     return out
 
+def _starter_path(lang):
+    return os.path.join(SITE, "starter", f"{lang}.json")
+
+def starter_words(lang):
+    fp = _starter_path(lang)
+    if os.path.exists(fp):
+        return json.load(open(fp, encoding="utf-8"))
+    return []
+
+def build_starter_lists(top_n=1500):
+    """Frequency starter vocabulary per language: the top-N most common words
+    across ALL books of that language (proper names excluded). One-time /
+    refreshable; written to SITE/starter/<lang>.json."""
+    from collections import defaultdict
+    by_lang = defaultdict(Counter)
+    names = set()
+    for lib in _iter_all_library_dirs():
+        bt = os.path.join(lib, "book.txt")
+        if not os.path.exists(bt):
+            continue
+        meta = _ensure_book_stats(lib)
+        text = clean_ocr(open(bt, encoding="utf-8").read())
+        for w in counted_words(text):
+            by_lang[meta.get("lang", "en")][fold(w)] += 1
+        names |= {fold(n) for n in proper_nouns(text)}
+    os.makedirs(os.path.join(SITE, "starter"), exist_ok=True)
+    out = {}
+    for lang, cnt in by_lang.items():
+        words = [w for w, _ in cnt.most_common()
+                 if w not in names and len(w) > 1][:top_n]
+        json.dump(words, open(_starter_path(lang), "w", encoding="utf-8"),
+                  ensure_ascii=False)
+        out[lang] = len(words)
+    return out
+
+def _iter_all_library_dirs():
+    root = library_root()
+    if os.path.isdir(root):
+        for h in os.listdir(root):
+            yield os.path.join(root, h)
+
 def reading_samples(max_pairs=2):
     """Public teaser (no login): one original->simplified excerpt per
     language, from the featured books' baseline level-0 translations."""

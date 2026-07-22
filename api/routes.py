@@ -204,6 +204,22 @@ def promote_vocab(req: VocabReq, user: dict = Depends(get_current_user)):
     n = db.vocab_add(user["id"], req.lang, req.words[:2000], "known")
     return {"promoted": n, "counts": db.vocab_counts(user["id"], req.lang)}
 
+@router.get("/vocab/starter", tags=["vocab"])
+def starter_info(lang: str, user: dict = Depends(get_current_user)):
+    """How big the frequency starter set is for a language."""
+    return {"lang": lang, "available": len(pipeline.starter_words(lang))}
+
+@router.post("/vocab/starter", tags=["vocab"])
+def adopt_starter(lang: str, user: dict = Depends(get_current_user)):
+    """One-tap: adopt the ~1500 most common words of a language as known —
+    a beginner's baseline vocabulary."""
+    words = pipeline.starter_words(lang)
+    if not words:
+        raise HTTPException(404, f"no starter set for {lang!r} yet")
+    n = db.vocab_add(user["id"], lang, words, "known")
+    return {"adopted": len(words), "changed": n,
+            "counts": db.vocab_counts(user["id"], lang)}
+
 @router.get("/books/{slug}/languages", tags=["reader"])
 def book_languages(slug: str, user: dict = Depends(get_current_user)):
     """Help languages this book's shared dictionary already covers."""
