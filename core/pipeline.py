@@ -30,7 +30,7 @@ import sys
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 from analyze import (fold, counted_words, tokenize, clean_ocr, proper_nouns,
-                     read_api_key, load_pages, classify_language)
+                     read_api_key, load_pages, classify_language, CYRILLIC)
 from simplify_page import MODELS, QuotaError
 
 import contextvars
@@ -278,9 +278,30 @@ def add_book(filename, blob):
 LANG_CODE = {"English": "en", "Spanish": "es", "Russian": "ru",
              "French": "fr", "Italian": "it", "German": "de"}
 
+_STOPWORDS = {
+    "en": set("the and of to a in is that it was for with as his he on at by "
+              "not you this but from they her she or an".split()),
+    "es": set("el la de que y en un se los las por con para una su del al no "
+              "lo como más pero sus le ya".split()),
+    "ru": set("и в не на что я с он а как это но же все она так его вы бы мы "
+              "к из у за то".split()),
+    "fr": set("le la les de un une et à il que ne se ce pas pour dans qui "
+              "nous vous est plus par sur".split()),
+    "it": set("il la di che e un una per con non le si come ma più mi ti "
+              "sono questo della nel gli".split()),
+    "de": set("der die und den das ist ein zu mit sich auf für nicht dem "
+              "des eine er sie war als".split()),
+}
+
 def _detect_lang(tokens):
-    c = Counter(classify_language(w) for w in tokens[:2000])
-    return c.most_common(1)[0][0] if c else "en"
+    """Book language by stopword frequency (Cyrillic -> ru immediately)."""
+    sample = tokens[:4000]
+    if sum(1 for t in sample[:600] if CYRILLIC.search(t)) > 20:
+        return "ru"
+    score = {code: sum(1 for t in sample if t in sw)
+             for code, sw in _STOPWORDS.items()}
+    best = max(score, key=score.get)
+    return best if score[best] else "en"
 
 def _ensure_book_stats(lib):
     """Cache word count + unique types + detected language in the book's
