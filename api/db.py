@@ -64,6 +64,15 @@ CREATE TABLE IF NOT EXISTS usage(
   pages INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(user_id, day)
 );
+CREATE TABLE IF NOT EXISTS user_vocab(
+  user_id INTEGER NOT NULL,
+  lang TEXT NOT NULL,
+  word TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'learning',   -- learning | known
+  ts REAL NOT NULL,
+  PRIMARY KEY(user_id, lang, word)
+);
+CREATE INDEX IF NOT EXISTS idx_vocab_user ON user_vocab(user_id, lang, state);
 """
 
 def get_db():
@@ -213,6 +222,44 @@ def usage_today(user_id):
         row = con.execute("SELECT pages FROM usage WHERE user_id=? AND day=?",
                           (user_id, day)).fetchone()
         return row["pages"] if row else 0
+
+def vocab_add(user_id, lang, words, state="learning"):
+    """Add words in a language at a state. 'known' always wins over
+    'learning' (promotion is one-way); returns how many rows changed."""
+    now = time.time()
+    n = 0
+    with contextlib.closing(get_db()) as con, con:
+        for w in words:
+            w = w.strip().lower()
+            if not w:
+                continue
+            cur = con.execute(
+                "INSERT INTO user_vocab(user_id, lang, word, state, ts) "
+                "VALUES(?,?,?,?,?) ON CONFLICT(user_id, lang, word) DO UPDATE "
+                "SET state=CASE WHEN user_vocab.state='known' THEN 'known' "
+                "ELSE excluded.state END",
+                (user_id, lang, w, state, now))
+            n += cur.rowcount
+    return n
+
+def vocab_counts(user_id, lang):
+    with contextlib.closing(get_db()) as con, con:
+        rows = con.execute(
+            "SELECT state, COUNT(*) c FROM user_vocab WHERE user_id=? AND "
+            "lang=? GROUP BY state", (user_id, lang)).fetchall()
+    d = {r["state"]: r["c"] for r in rows}
+    return {"known": d.get("known", 0), "learning": d.get("learning", 0)}
+
+def vocab_words(user_id, lang, state=None, limit=5000):
+    q = "SELECT word FROM user_vocab WHERE user_id=? AND lang=?"
+    args = [user_id, lang]
+    if state:
+        q += " AND state=?"
+        args.append(state)
+    q += " ORDER BY ts DESC LIMIT ?"
+    args.append(limit)
+    with contextlib.closing(get_db()) as con, con:
+        return [r["word"] for r in con.execute(q, args)]
 
 def add_usage(user_id, pages):
     day = time.strftime("%Y-%m-%d")

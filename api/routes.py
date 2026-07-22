@@ -177,6 +177,33 @@ def reader_data(slug: str, level: int = 0, baseline: bool = False,
     except FileNotFoundError:
         raise HTTPException(404, f"book {slug!r} not found")
 
+# ---------------- personal vocabulary (2g) ----------------
+
+class VocabReq(BaseModel):
+    lang: str
+    words: list = []
+    state: str = "learning"
+
+@router.get("/vocab", tags=["vocab"])
+def get_vocab(lang: str, user: dict = Depends(get_current_user)):
+    """Counts + the learning list (words the user is still mastering)."""
+    return {"lang": lang, "counts": db.vocab_counts(user["id"], lang),
+            "learning": db.vocab_words(user["id"], lang, "learning")}
+
+@router.post("/vocab", tags=["vocab"])
+def add_vocab(req: VocabReq, user: dict = Depends(get_current_user)):
+    """Add words at a state (tap-to-learn -> learning; bulk import -> known)."""
+    if req.state not in ("learning", "known"):
+        raise HTTPException(400, "state must be learning or known")
+    n = db.vocab_add(user["id"], req.lang, req.words[:2000], req.state)
+    return {"changed": n, "counts": db.vocab_counts(user["id"], req.lang)}
+
+@router.post("/vocab/promote", tags=["vocab"])
+def promote_vocab(req: VocabReq, user: dict = Depends(get_current_user)):
+    """Mark words as known (passed the review game)."""
+    n = db.vocab_add(user["id"], req.lang, req.words[:2000], "known")
+    return {"promoted": n, "counts": db.vocab_counts(user["id"], req.lang)}
+
 @router.get("/books/{slug}/languages", tags=["reader"])
 def book_languages(slug: str, user: dict = Depends(get_current_user)):
     """Help languages this book's shared dictionary already covers."""

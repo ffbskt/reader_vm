@@ -363,6 +363,44 @@ Proposed picks (all public domain; confirm before bulk translate):
       **Check:** each catalogue book readable at L0 with hover in all three
       languages; background stays within budget.
 
+## Phase 2g — personal growing vocabulary + review game (user 2026-07-22)
+
+Numbers (measured): Easy Spanish textbook ≈ 1,400 word types; La Celestina
+11,395 types / 70,434 tokens; top ~1,700 frequent words cover 80% of tokens.
+=> a per-language STARTER SET of ~1,500 common words ≈ a textbook and already
+unlocks ~80% of real text.
+
+Model: each user has a personal vocabulary PER LANGUAGE; each word is
+`learning` (seen, not mastered) or `known` (mastered). Start from the starter
+set (or empty) and grow it: tap a word while reading -> `learning`; pass it in
+the review game -> `known`. The reader marks words by the user's OWN state, so
+coverage rises as the vocabulary grows.
+
+- [ ] 2g.1 Personal vocab store + API. DB user_vocab(user_id, lang, word,
+      state, ts). GET /vocab?lang -> counts + lists; POST /vocab {lang,
+      word, state}; POST /vocab/promote {lang, words}. (pipeline stays pure;
+      the API owns the DB.)
+      **Check:** add words as learning, promote to known, counts update;
+      isolated per user + language.
+- [ ] 2g.2 Frequency starter sets per language (es/en/ru): build top-~1500
+      lists from the featured corpus; POST /vocab/starter?lang adopts them as
+      `known` in one call.
+      **Check:** adopt es starter -> ~1500 known words; Celestina coverage
+      jumps to ~the textbook level.
+- [ ] 2g.3 Reader tap-to-learn. reader_site fetches the user's vocab and
+      marks each word known / learning / unknown distinctly; tapping an
+      unknown/learning word adds it to `learning` (POST /vocab) and updates
+      live. Personal marking, no re-translation.
+      **Check:** tap a word -> it joins learning + restyles; reload keeps it.
+- [ ] 2g.4 Review game (Duolingo-style 5×5 match). GET /vocab/quiz?lang ->
+      N learning words + shuffled translations; the UI matches word↔meaning;
+      correct pairs POST /vocab/promote -> `known` and leave the set.
+      **Check:** play a round, correct matches move learning->known and drop
+      out of the reader's highlights.
+- [ ] 2g.5 Vocab stats + growth. Header/step shows vocabulary size per
+      language and "N new words to learn in this book".
+      **Check:** size grows across a reading+game session.
+
 ## Phase 3 — payments
 
 - [ ] 3.1 Stripe account, Checkout for Plus, webhook -> tier (test mode).
