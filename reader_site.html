@@ -60,6 +60,7 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
   margin-bottom:14px}
 .ghead button{border:none;background:none;font-size:1.1rem;cursor:pointer;
   color:var(--muted)}
+.gsub{font-size:.85rem;color:var(--muted);margin:-6px 0 14px;line-height:1.4}
 .gcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .gcols button{padding:11px 8px;border:2px solid var(--line);border-radius:8px;
   background:var(--panel2);font:inherit;cursor:pointer;color:var(--ink)}
@@ -85,8 +86,10 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
 <div id="tip"></div>
 <div id="game" hidden>
   <div class="gcard">
-    <div class="ghead"><b>Review — match the words</b>
+    <div class="ghead"><b>Vocabulary practice</b>
       <button id="gClose">✕</button></div>
+    <div class="gsub">Tap a word, then its meaning. Correct matches move the
+      word into your known vocabulary.</div>
     <div class="gcols"><div id="gWords"></div><div id="gTr"></div></div>
     <div id="gMsg"></div>
   </div>

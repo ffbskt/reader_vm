@@ -408,6 +408,20 @@ coverage rises as the vocabulary grows.
       **Check:** PASSED live on VM — Celestina gap 11,395 new -> adopt
       starter -> 1,274 known / 10,121 new. PHASE 2g COMPLETE.
 
+## Phase 2h — translation map + UX polish (user 2026-07-22)
+
+- [ ] 2h.1 Per-book translation MAP attached to each book: a grid, LEVELS
+      0/25/50/75 top→bottom (rows) × book parts/pages left→right (columns);
+      a cell is filled when that page is translated at that level (guided +
+      baseline shown distinctly). The user's last-read position ("continue")
+      is a SEPARATE marker, not part of the grid. Lives on the book card /
+      book detail so translated parts are visibly "attached to the book".
+      **Check:** translate a range -> those cells fill; continue marker
+      points at the last page read; nothing re-translated (cache honoured).
+- [ ] 2h.2 Fully translate the wizard UI (all hints + buttons + job/among
+      messages), not just titles — some hints still English in es/ru.
+      **Check:** switch UI to es/ru -> no English left in the wizard chrome.
+
 ## Phase 3 — payments
 
 - [ ] 3.1 Stripe account, Checkout for Plus, webhook -> tier (test mode).

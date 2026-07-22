@@ -80,7 +80,9 @@ a.readlink{color:var(--accent);font-weight:600}
   background:var(--panel);min-width:170px;position:relative;
   display:flex;align-items:stretch}
 .bcard:hover{border-color:var(--accent)}
-.bcard.on{border-color:var(--accent);background:var(--panel2)}
+.bcard.on{border-color:var(--accent);background:var(--panel2);
+  box-shadow:0 0 0 2px var(--accent) inset}
+.chosen{font-size:.85rem;font-weight:400;color:var(--accent);margin-left:10px}
 .bcard-pick{border:none;background:none;font:inherit;color:var(--ink);
   cursor:pointer;text-align:left;padding:10px 34px 10px 16px;flex:1}
 .bcard b{display:block;margin-bottom:2px}
@@ -151,9 +153,9 @@ a.readlink{color:var(--accent);font-weight:600}
 
 <!-- 1 ─ known vocabulary -->
 <div class="step" id="s1">
-  <h2><span class="no">1</span>Your known vocabulary</h2>
-  <p class="hint">Upload books you have already read (PDF/TXT — words used
-  2+ times count as known) or a plain word list (one word per line).</p>
+  <h2><span class="no">1</span><span data-t="s1t">Your known vocabulary</span></h2>
+  <p class="hint" data-t="s1h">Upload books you have already read (PDF/TXT —
+  words used 2+ times count as known) or a plain word list.</p>
   <input type="file" id="knownFile" multiple accept=".pdf,.txt,.csv,.md" hidden>
   <button class="btn" id="knownUp">＋ Add book or word list</button>
   <span id="knownMsg" class="err"></span>
@@ -164,11 +166,10 @@ a.readlink{color:var(--accent);font-weight:600}
 
 <!-- 2 ─ target book + stats -->
 <div class="step" id="s2">
-  <h2><span class="no">2</span>The hard book you want to read</h2>
-  <p class="hint">Upload the target book (PDF/TXT), then check the coverage:
-  a random 30 of its unknown words and per-page difficulty.</p>
+  <h2><span class="no">2</span><span data-t="s2t">The book you want to read</span>
+    <span id="chosenBook" class="chosen"></span></h2>
   <input type="file" id="bookFile" accept=".pdf,.txt" hidden>
-  <button class="btn" id="bookUp">＋ Upload a new book</button>
+  <button class="btn" id="bookUp" data-t="uploadbook">＋ Upload a new book</button>
   <span id="bookMsg" class="err"></span>
   <div class="booksec"><h3 data-t="mybooks">My books</h3>
     <div class="bookcards" id="myBooks"></div></div>
@@ -190,7 +191,7 @@ a.readlink{color:var(--accent);font-weight:600}
 
 <!-- 3 ─ level -->
 <div class="step dis" id="s3">
-  <h2><span class="no">3</span>Level of simplification</h2>
+  <h2><span class="no">3</span><span data-t="s3t">Level of simplification</span></h2>
   <p class="hint">The level = how much of the unknown TEXT stays. The most
   frequent unknown words are kept until they cover that share of the unknown
   word occurrences — so the four levels feel evenly spaced while reading.
@@ -201,7 +202,7 @@ a.readlink{color:var(--accent);font-weight:600}
 
 <!-- 4 ─ translate -->
 <div class="step dis" id="s4">
-  <h2><span class="no">4</span>Translate</h2>
+  <h2><span class="no">4</span><span data-t="s4t">Translate</span></h2>
   <p class="hint">Pick a page range and start. Pages are sent to the Gemini
   API one by one (free tier, cached pages are skipped for free).</p>
   <label style="display:block;margin:0 0 10px;font-size:.9rem">
@@ -218,7 +219,7 @@ a.readlink{color:var(--accent);font-weight:600}
 
 <!-- 5 ─ read online -->
 <div class="step dis" id="s5">
-  <h2><span class="no">5</span>Read online</h2>
+  <h2><span class="no">5</span><span data-t="s5t">Read online</span></h2>
   <p class="hint">Hover (or tap) any word for its English and Russian
   translation.</p>
   <a class="readlink" id="readLink" target="_blank">Open the reader →</a>
@@ -227,7 +228,7 @@ a.readlink{color:var(--accent);font-weight:600}
 
 <!-- 6 ─ PDF -->
 <div class="step dis" id="s6">
-  <h2><span class="no">6</span>Download PDF</h2>
+  <h2><span class="no">6</span><span data-t="s6t">Download PDF</span></h2>
   <div class="modes" id="pdfModes"></div>
   <button class="btn" id="goPdf">Build &amp; download PDF</button>
   <span class="jobline" id="pdfMsg"></span>
@@ -261,21 +262,33 @@ const I18N = {
       + 'to your level, every hard word translated on hover.',
     words:'words', ready:'ready', notr:'not translated',
     youknow:'You know', vwords:'words', adopt:'Start with 1500 common words',
-    newwords:'new words to learn in this book'},
+    newwords:'new words to learn in this book',
+    s1t:'Your known vocabulary', s1h:'Upload books you have already read '
+      + '(PDF/TXT) or a plain word list.', s2t:'The book you want to read',
+    s3t:'Level of simplification', s4t:'Translate', s5t:'Read online',
+    s6t:'Download PDF', uploadbook:'＋ Upload a new book'},
   es: {iread:'Leo en', withtr:', con traducción a', and:'y', addlang:'＋ añadir',
     menuis:'. Menú:', mybooks:'Mis libros', defaultbooks:'Biblioteca',
     intro:'Elige un libro y léelo simplificado a tu nivel, cada palabra '
       + 'difícil traducida al pasar el ratón.',
     words:'palabras', ready:'listas', notr:'sin traducir',
     youknow:'Conoces', vwords:'palabras', adopt:'Empezar con 1500 palabras comunes',
-    newwords:'palabras nuevas por aprender en este libro'},
+    newwords:'palabras nuevas por aprender en este libro',
+    s1t:'Tu vocabulario conocido', s1h:'Sube libros que ya has leído '
+      + '(PDF/TXT) o una lista de palabras.', s2t:'El libro que quieres leer',
+    s3t:'Nivel de simplificación', s4t:'Traducir', s5t:'Leer en línea',
+    s6t:'Descargar PDF', uploadbook:'＋ Subir un libro'},
   ru: {iread:'Читаю на', withtr:', с переводом на', and:'и', addlang:'＋ добавить',
     menuis:'. Меню:', mybooks:'Мои книги', defaultbooks:'Библиотека',
     intro:'Выберите книгу и читайте её упрощённой под ваш уровень — каждое '
       + 'трудное слово переводится по наведению.',
     words:'слов', ready:'готово', notr:'не переведено',
     youknow:'Вы знаете', vwords:'слов', adopt:'Начать с 1500 частых слов',
-    newwords:'новых слов в этой книге'}};
+    newwords:'новых слов в этой книге',
+    s1t:'Ваш известный словарь', s1h:'Загрузите книги, которые вы уже '
+      + 'прочитали (PDF/TXT), или список слов.', s2t:'Книга для чтения',
+    s3t:'Уровень упрощения', s4t:'Перевести', s5t:'Читать онлайн',
+    s6t:'Скачать PDF', uploadbook:'＋ Загрузить книгу'}};
 const lang = JSON.parse(localStorage.getItem('lang') ||
   '{"read":"es","help1":"en","help2":"","ui":"en"}');
 const t = k => (I18N[lang.ui] || I18N.en)[k] || I18N.en[k] || k;
@@ -551,8 +564,11 @@ $('bookFile').onchange = async () => {
 };
 function selectBook(slug){
   book = slug || null;
-  document.querySelectorAll('#bookCards .bcard').forEach(c =>
-    c.classList.toggle('on', c.dataset.s === book));
+  // highlight the chosen card in BOTH sections (My books / Library)
+  document.querySelectorAll('#myBooks .bcard, #defaultBooks .bcard')
+    .forEach(c => c.classList.toggle('on', c.dataset.s === book));
+  const title = document.querySelector(`.bcard[data-s="${book}"] b`);
+  $('chosenBook').textContent = title ? '📖 ' + title.textContent : '';
   ['s3','s4','s5','s6'].forEach(id => $(id).classList.toggle('dis', !book));
   $('stats').style.display = 'none';
   if (book) loadStats();
