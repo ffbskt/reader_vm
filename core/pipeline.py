@@ -308,6 +308,7 @@ def list_books():
             continue
         m = json.load(open(mp, encoding="utf-8"))
         out.append({"slug": f["slug"], "featured": True, "lang": f.get("lang"),
+                    "level": f.get("level"),
                     "title": f.get("title", m.get("title", f["slug"])),
                     "pages": m.get("pages", 0),
                     "done_pages": {lv: len(cached_pages(f["slug"], lv))
