@@ -206,6 +206,44 @@ def promote_vocab(req: VocabReq, user: dict = Depends(get_current_user)):
     n = db.vocab_add(user["id"], req.lang, req.words[:2000], "known")
     return {"promoted": n, "counts": db.vocab_counts(user["id"], req.lang)}
 
+@router.get("/vocab/quiz", tags=["vocab"])
+def vocab_quiz(lang: str, book: str = "", n: int = 5,
+               user: dict = Depends(get_current_user)):
+    """A review round: up to N of the user's `learning` words + their
+    translations (into `help`), shuffled, for a match-the-pairs game."""
+    import random
+    learning = db.vocab_words(user["id"], lang, "learning")
+    if not learning:
+        return {"pairs": [], "reason": "no words to review yet — tap words "
+                                       "while reading to add them"}
+    # translations come from a book's shared dictionary if given, else any
+    from core import pipeline
+    dictionary = {}
+    slugs = [book] if book else [b["slug"] for b in pipeline.list_books()
+                                 if b.get("lang") == lang]
+    from core.vocab import lookup
+    help_lang = "en" if lang != "en" else "ru"
+    random.shuffle(learning)
+    pairs = []
+    for slug in slugs:
+        if len(pairs) >= n:
+            break
+        try:
+            d = pipeline.reader_payload(slug, 0, False, [help_lang])
+        except Exception:
+            continue
+        for w in learning:
+            if len(pairs) >= n:
+                break
+            if any(p["word"] == w for p in pairs):
+                continue
+            tr = lookup(d["dictionary"], w, [help_lang])
+            if tr and tr.get(help_lang):
+                pairs.append({"word": w, "translation": tr[help_lang]})
+    return {"lang": lang, "help": help_lang, "pairs": pairs,
+            "shuffled": random.sample([p["translation"] for p in pairs],
+                                      len(pairs))}
+
 @router.get("/vocab/starter", tags=["vocab"])
 def starter_info(lang: str, user: dict = Depends(get_current_user)):
     """How big the frequency starter set is for a language."""

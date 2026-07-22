@@ -52,10 +52,28 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
 .vocab .rep b{color:var(--muted);text-decoration:underline}
 .empty{font-family:system-ui,sans-serif;color:var(--muted);text-align:center;
   margin-top:60px}
+#game{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;
+  align-items:center;justify-content:center;z-index:50}
+.gcard{background:var(--panel);border-radius:14px;padding:20px 22px;
+  width:min(460px,92vw);font-family:system-ui,sans-serif}
+.ghead{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:14px}
+.ghead button{border:none;background:none;font-size:1.1rem;cursor:pointer;
+  color:var(--muted)}
+.gcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gcols button{padding:11px 8px;border:2px solid var(--line);border-radius:8px;
+  background:var(--panel2);font:inherit;cursor:pointer;color:var(--ink)}
+.gcols button.sel{border-color:var(--accent)}
+.gcols button.ok{border-color:#2e9e5b;background:#eafaf0;color:#2e9e5b;
+  pointer-events:none}
+.gcols button.bad{border-color:var(--unk);animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+#gMsg{margin-top:12px;color:var(--muted);font-size:.9rem;text-align:center}
 </style>
 <div class="wrap">
   <header><h1 id="title">…</h1>
     <select class="lv" id="lv" title="level — pages translated"></select>
+    <button id="reviewBtn" class="lv" style="cursor:pointer" hidden></button>
   </header>
   <div id="view"></div>
 </div>
@@ -65,6 +83,14 @@ nav select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:6
   <button id="next">next ›</button>
 </nav>
 <div id="tip"></div>
+<div id="game" hidden>
+  <div class="gcard">
+    <div class="ghead"><b>Review — match the words</b>
+      <button id="gClose">✕</button></div>
+    <div class="gcols"><div id="gWords"></div><div id="gTr"></div></div>
+    <div id="gMsg"></div>
+  </div>
+</div>
 
 <script>
 const qs = new URLSearchParams(location.search);
@@ -180,12 +206,72 @@ function attachTips(){
       myVocab.learning.add(k);
       document.querySelectorAll(`.w[data-w="${k}"]`)
         .forEach(x => x.className = 'w learning');
+      updateReviewBtn();
       fetch('/vocab', {method: 'POST', headers: {...authHeaders(),
         'Content-Type': 'application/json'},
         body: JSON.stringify({lang: myVocab.lang, words: [k]})});
     };
   });
 }
+// ---- review game (2g.4): match words to translations ----
+function updateReviewBtn(){
+  const btn = document.getElementById('reviewBtn');
+  const n = myVocab.learning.size;
+  btn.hidden = n === 0;
+  btn.textContent = `🎯 review (${n})`;
+}
+let gPick = null, gMatched = 0, gTotal = 0;
+async function openGame(){
+  const g = document.getElementById('game');
+  const q = await fetch(
+    `/vocab/quiz?lang=${myVocab.lang}&book=${qs.get('book')}&n=5`,
+    {headers: authHeaders()}).then(r => r.json());
+  if (!q.pairs || !q.pairs.length){
+    document.getElementById('gWords').innerHTML = '';
+    document.getElementById('gTr').innerHTML = '';
+    document.getElementById('gMsg').textContent = q.reason || 'nothing to review';
+    g.hidden = false; return;
+  }
+  gPick = null; gMatched = 0; gTotal = q.pairs.length;
+  const trOf = {}; q.pairs.forEach(p => trOf[p.word] = p.translation);
+  document.getElementById('gWords').innerHTML = q.pairs.map(p =>
+    `<button data-w="${p.word}">${p.word}</button>`).join('');
+  document.getElementById('gTr').innerHTML = q.shuffled.map(tr =>
+    `<button data-tr="${esc(tr)}">${esc(tr)}</button>`).join('');
+  document.getElementById('gMsg').textContent =
+    'tap a word, then its translation';
+  const words = [...document.querySelectorAll('#gWords button')];
+  const trs = [...document.querySelectorAll('#gTr button')];
+  words.forEach(w => w.onclick = () => {
+    words.forEach(x => x.classList.remove('sel')); w.classList.add('sel');
+    gPick = w; });
+  trs.forEach(tb => tb.onclick = () => {
+    if (!gPick) return;
+    const want = trOf[gPick.dataset.w];
+    if (tb.dataset.tr === want){
+      gPick.classList.add('ok'); tb.classList.add('ok');
+      const word = gPick.dataset.w; gPick = null; gMatched++;
+      myVocab.learning.delete(word); myVocab.known.add(word);
+      fetch('/vocab/promote', {method: 'POST', headers: {...authHeaders(),
+        'Content-Type': 'application/json'},
+        body: JSON.stringify({lang: myVocab.lang, words: [word]})});
+      document.querySelectorAll(`.w[data-w="${word}"]`)
+        .forEach(x => x.className = 'w');       // mastered -> plain in the text
+      if (gMatched === gTotal){
+        document.getElementById('gMsg').textContent =
+          `✓ ${gTotal} words learned! Nicely done.`;
+        updateReviewBtn();
+      }
+    } else {
+      tb.classList.add('bad'); setTimeout(() => tb.classList.remove('bad'), 300);
+    }
+  });
+  g.hidden = false;
+}
+document.getElementById('reviewBtn').onclick = openGame;
+document.getElementById('gClose').onclick = () =>
+  document.getElementById('game').hidden = true;
+
 document.getElementById('prev').onclick = () => { cur--; render(); scrollTo(0,0); };
 document.getElementById('next').onclick = () => { cur++; render(); scrollTo(0,0); };
 document.getElementById('pageSel').onchange = e => { cur = +e.target.value; render(); };
@@ -218,6 +304,7 @@ const authHeaders = () => localStorage.getItem('jwt') ?
     myVocab.known = new Set(v.known || []);
     myVocab.learning = new Set(v.learning || []);
   } catch (e) {}
+  updateReviewBtn();
 
   const r = await fetch(`/books/${book}/reader?level=${level}${bq}`,
                         {headers: authHeaders()});
