@@ -376,12 +376,12 @@ set (or empty) and grow it: tap a word while reading -> `learning`; pass it in
 the review game -> `known`. The reader marks words by the user's OWN state, so
 coverage rises as the vocabulary grows.
 
-- [ ] 2g.1 Personal vocab store + API. DB user_vocab(user_id, lang, word,
-      state, ts). GET /vocab?lang -> counts + lists; POST /vocab {lang,
-      word, state}; POST /vocab/promote {lang, words}. (pipeline stays pure;
-      the API owns the DB.)
-      **Check:** add words as learning, promote to known, counts update;
-      isolated per user + language.
+- [x] 2g.1 DONE 2026-07-22: user_vocab(user_id, lang, word, state, ts) in
+      SQLite; GET /vocab?lang (counts + learning list), POST /vocab (add,
+      default learning), POST /vocab/promote (-> known). 'known' is sticky
+      (re-adding as learning never demotes). 4 tests (add/promote/isolation/
+      sticky). Deployed + verified live.
+      **Check:** PASSED.
 - [ ] 2g.2 Frequency starter sets per language (es/en/ru): build top-~1500
       lists from the featured corpus; POST /vocab/starter?lang adopts them as
       `known` in one call.
