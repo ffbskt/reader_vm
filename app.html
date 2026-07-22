@@ -376,7 +376,8 @@ async function refreshBooks(sel){
     const base = Object.values(b.done_base || {}).reduce((a, n) => a + n, 0);
     const total = Object.values(b.done_pages).reduce((a, n) => a + n, 0) + base;
     const badge = b.featured
-      ? `<span class="feat">★ ${b.lang || 'featured'}</span>` : '';
+      ? `<span class="feat">★ ${b.lang || ''}${b.level ? ' · ' + b.level : ''}</span>`
+      : '';
     const del = b.featured ? '' :
       `<button class="bcard-del" data-s="${b.slug}" title="remove from my library"
         aria-label="remove ${b.title}">✕</button>`;
