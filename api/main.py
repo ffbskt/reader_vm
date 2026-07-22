@@ -113,3 +113,7 @@ def spa():
 @app.get("/reader_site.html", include_in_schema=False)
 def reader_page():
     return FileResponse(os.path.join(ROOT, "reader_site.html"))
+
+@app.get("/vocab.html", include_in_schema=False)
+def vocab_page():
+    return FileResponse(os.path.join(ROOT, "vocab.html"))
