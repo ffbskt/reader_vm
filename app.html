@@ -134,6 +134,10 @@ a.readlink{color:var(--accent);font-weight:600}
 .shelf .cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px;
   max-height:0;overflow:hidden;transition:max-height .2s}
 .shelf:hover .cells{max-height:200px}
+.shelf .ivlrow{display:flex;flex-wrap:wrap;gap:5px;align-items:center;
+  margin-top:6px}
+.shelf .ivllab{font-size:.68rem;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;min-width:64px}
 .shelf .ivl{padding:3px 10px;border-radius:5px;background:var(--panel2);
   color:var(--muted);font-size:.75rem;text-decoration:none;
   font-variant-numeric:tabular-nums;border:1px solid transparent}
@@ -692,34 +696,44 @@ async function updateReadPdf(){
   const cont = {};
   (m.positions || []).forEach(p => cont[`${p.level}_${p.baseline}`] = p.page);
   let any = false;
-  $('transMap').innerHTML = [0, 25, 50, 75].map(lv => {
-    const g = (m.levels[lv] || {}).guided || [];
-    const b = (m.levels[lv] || {}).base || [];
-    const pages = [...new Set([...g, ...b])].sort((a, c) => a - c);
-    if (pages.length) any = true;
-    // group consecutive pages into intervals: [41..45] -> "41–45"
+  // consecutive pages -> intervals: [41,42,43,45] -> [[41,43],[45,45]]
+  const toIvl = pages => {
     const iv = [];
-    for (const pg of pages){
+    for (const pg of [...pages].sort((a, c) => a - c)){
       const last = iv[iv.length - 1];
       if (last && pg === last[1] + 1) last[1] = pg; else iv.push([pg, pg]);
     }
-    const cont0 = cont[`${lv}_0`], cont1 = cont[`${lv}_1`];
+    return iv;
+  };
+  const ivlRow = (label, iv, lv, useBase, contPage) => {
+    if (!iv.length) return '';
     const cells = iv.map(([a, c]) => {
-      const useBase = !g.includes(a);              // baseline only if no guided
-      const contPage = useBase ? cont1 : cont0;
       const isCont = contPage != null && contPage >= a && contPage <= c;
-      const startPage = isCont ? contPage : a;     // resume inside the range
+      const startPage = isCont ? contPage : a;
       const href = `reader_site.html?book=${book}&level=${lv}`
         + (useBase ? '&baseline=1' : '') + '&page=' + startPage + langq;
-      const label = a === c ? a : `${a}–${c}`;
+      const lab = a === c ? a : `${a}–${c}`;
       return `<a class="ivl on ${isCont ? 'cont' : ''}" href="${href}"
-        target="_blank" title="pages ${label}${isCont ? ' · continue at '
-        + contPage : ''}">${label}${isCont ? ' ▸' : ''}</a>`;
+        target="_blank" title="pages ${lab}${isCont ? ' · continue at '
+        + contPage : ''}">${lab}${isCont ? ' ▸' : ''}</a>`;
     }).join('');
-    return `<div class="shelf ${pages.length ? '' : 'empty'}">
+    return `<div class="ivlrow"><span class="ivllab">${label}</span>${cells}</div>`;
+  };
+  $('transMap').innerHTML = [0, 25, 50, 75].map(lv => {
+    const g = (m.levels[lv] || {}).guided || [];
+    const b = (m.levels[lv] || {}).base || [];
+    if (g.length || b.length) any = true;
+    // guided (my vocabulary) and generic (no vocabulary) are DIFFERENT texts
+    // -> separate rows, each with its own real gaps
+    const rows = ivlRow('my vocab', toIvl(g), lv, false, cont[`${lv}_0`])
+               + ivlRow('generic', toIvl(b), lv, true, cont[`${lv}_1`]);
+    const count = (g.length ? g.length + ' vocab' : '')
+      + (g.length && b.length ? ' · ' : '')
+      + (b.length ? b.length + ' generic' : '');
+    return `<div class="shelf ${rows ? '' : 'empty'}">
       <div class="sh-head"><span>${lv} · ${LEVEL_NAMES[lv]}</span>
-        <small>${pages.length ? pages.length + ' p.' : '—'}</small></div>
-      <div class="cells">${cells || '<small style="color:var(--muted)">'
+        <small>${count || '—'}</small></div>
+      <div class="cells">${rows || '<small style="color:var(--muted)">'
         + 'not translated — run step 4</small>'}</div></div>`;
   }).join('');
   $('readInfo').textContent = '';
