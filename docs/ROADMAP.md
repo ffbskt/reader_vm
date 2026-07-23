@@ -410,7 +410,22 @@ coverage rises as the vocabulary grows.
 
 ## Phase 2h — translation map + UX polish (user 2026-07-22)
 
-- [ ] 2h.1 Per-book translation MAP attached to each book: a grid, LEVELS
+- [x] 2h.1 DONE 2026-07-22: translation map in step 5. GET /books/{slug}/map
+      -> per-level guided+baseline translated page lists + reading positions.
+      4 level shelves (0/25/50/75 top→down), stacked/fanned (−14px overlap),
+      collapsed cells that expand on hover to show translated page numbers
+      (left→right); each cell links to the reader at that level+page; the
+      last-read page for a level/mode is outlined as the "continue" marker.
+      Reading position (below) restores where you stopped.
+      **Check:** PASSED live-local — 4 shelves with page cells, overlap −14px,
+      cells max-height 0 until hover, hrefs carry page=; nothing re-translated.
+- [x] 2h.3 DONE 2026-07-22: reading position saved per (book, level, mode);
+      reader resumes there on open (fixed reopen jumping to page 1); each
+      level/mode remembers its own last page. reading_pos table +
+      POST/GET /books/{slug}/position.
+      **Check:** PASSED — read to p43, reload -> resumes p43 (was p41).
+
+- [ ] 2h.1x (superseded) Per-book translation MAP attached to each book: LEVELS
       0/25/50/75 top→bottom (rows) × book parts/pages left→right (columns);
       a cell is filled when that page is translated at that level (guided +
       baseline shown distinctly). The user's last-read position ("continue")
