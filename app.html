@@ -120,6 +120,26 @@ a.readlink{color:var(--accent);font-weight:600}
 .addlang:hover{border-color:var(--accent);color:var(--accent)}
 .booksec h3{font-size:1rem;margin:16px 0 4px}
 .bcard .wc{font-size:.72rem;color:var(--muted);display:block;margin-top:2px}
+/* translation map: level shelves stacked/fanned, expand on hover */
+.transmap{margin:6px 0 14px}
+.shelf{position:relative;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:10px 14px;margin-top:-14px;cursor:pointer;
+  transition:margin .18s, box-shadow .18s;box-shadow:0 -2px 6px rgba(0,0,0,.06)}
+.shelf:first-child{margin-top:0}
+.shelf:hover{margin-top:6px;margin-bottom:6px;
+  box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:3}
+.shelf .sh-head{display:flex;justify-content:space-between;align-items:center;
+  font-weight:600;font-size:.92rem}
+.shelf .sh-head small{color:var(--muted);font-weight:400}
+.shelf .cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px;
+  max-height:0;overflow:hidden;transition:max-height .2s}
+.shelf:hover .cells{max-height:200px}
+.shelf .cell{width:26px;height:22px;border-radius:4px;background:var(--panel2);
+  color:var(--muted);font-size:.62rem;display:flex;align-items:center;
+  justify-content:center;border:1px solid transparent}
+.shelf .cell.on{background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.shelf .cell.cont{outline:2px solid var(--unk);outline-offset:1px}
+.shelf.empty{opacity:.55}
 .vocabinfo{margin:-8px 0 18px;font-size:.95rem;color:var(--muted)}
 .vocabinfo b{color:var(--ink);font-variant-numeric:tabular-nums}
 .vocabinfo .adopt{margin-left:10px;background:var(--accent);
@@ -220,9 +240,10 @@ a.readlink{color:var(--accent);font-weight:600}
 <!-- 5 ─ read online -->
 <div class="step dis" id="s5">
   <h2><span class="no">5</span><span data-t="s5t">Read online</span></h2>
-  <p class="hint">Hover (or tap) any word for its English and Russian
-  translation.</p>
-  <a class="readlink" id="readLink" target="_blank">Open the reader →</a>
+  <p class="hint" data-t="s5h">Each level is a shelf of translated pages —
+  hover a level to see its pages, click one to read there.</p>
+  <div class="transmap" id="transMap"></div>
+  <a class="readlink" id="readLink" target="_blank" style="display:none">→</a>
   <span class="jobline" id="readInfo"></span>
 </div>
 
@@ -266,7 +287,7 @@ const I18N = {
     s1t:'Your known vocabulary', s1h:'Upload books you have already read '
       + '(PDF/TXT) or a plain word list.', s2t:'The book you want to read',
     s3t:'Level of simplification', s4t:'Translate', s5t:'Read online',
-    s6t:'Download PDF', uploadbook:'＋ Upload a new book'},
+    s6t:'Download PDF', uploadbook:'＋ Upload a new book', s5h:'Each level is a shelf of translated pages — hover to see them, click a page to read there.'},
   es: {iread:'Leo en', withtr:', con traducción a', and:'y', addlang:'＋ añadir',
     menuis:'. Menú:', mybooks:'Mis libros', defaultbooks:'Biblioteca',
     intro:'Elige un libro y léelo simplificado a tu nivel, cada palabra '
@@ -277,7 +298,7 @@ const I18N = {
     s1t:'Tu vocabulario conocido', s1h:'Sube libros que ya has leído '
       + '(PDF/TXT) o una lista de palabras.', s2t:'El libro que quieres leer',
     s3t:'Nivel de simplificación', s4t:'Traducir', s5t:'Leer en línea',
-    s6t:'Descargar PDF', uploadbook:'＋ Subir un libro'},
+    s6t:'Descargar PDF', uploadbook:'＋ Subir un libro', s5h:'Cada nivel es un estante de páginas traducidas — pasa el ratón para verlas, haz clic para leer.'},
   ru: {iread:'Читаю на', withtr:', с переводом на', and:'и', addlang:'＋ добавить',
     menuis:'. Меню:', mybooks:'Мои книги', defaultbooks:'Библиотека',
     intro:'Выберите книгу и читайте её упрощённой под ваш уровень — каждое '
@@ -288,7 +309,7 @@ const I18N = {
     s1t:'Ваш известный словарь', s1h:'Загрузите книги, которые вы уже '
       + 'прочитали (PDF/TXT), или список слов.', s2t:'Книга для чтения',
     s3t:'Уровень упрощения', s4t:'Перевести', s5t:'Читать онлайн',
-    s6t:'Скачать PDF', uploadbook:'＋ Загрузить книгу'}};
+    s6t:'Скачать PDF', uploadbook:'＋ Загрузить книгу', s5h:'Каждый уровень — полка переведённых страниц: наведите, чтобы увидеть, нажмите, чтобы читать.'}};
 const lang = JSON.parse(localStorage.getItem('lang') ||
   '{"read":"es","help1":"en","help2":"","ui":"en"}');
 const t = k => (I18N[lang.ui] || I18N.en)[k] || I18N.en[k] || k;
@@ -660,24 +681,41 @@ async function refreshJob(){
     if (!poll) trackJob();
   } else { clearInterval(poll); poll = null; updateReadPdf(); }
 }
-// ---- steps 5+6 ----
+// ---- steps 5+6: translation map (2h.1) ----
+const LEVEL_NAMES = {0:'Only my words', 25:'Beginner', 50:'Intermediate',
+                     75:'Advanced'};
 async function updateReadPdf(){
   if (!book) return;
-  const d = await api('/books');
-  const b = d.books.find(x => x.slug === book);
-  const dp = (b && (isBase() ? b.done_base : b.done_pages)) || {};
-  const bq = (isBase() ? '&baseline=1' : '') + '&langs=' + helpLangs().join(',');
-  const n = dp[level] || 0;
-  $('readLink').href = `reader_site.html?book=${book}&level=${level}${bq}`;
-  const shelves = [0, 25, 50, 75].filter(l => dp[l]).map(l =>
-    `<a href="reader_site.html?book=${book}&level=${l}${bq}"
-        ${l === level ? 'style="font-weight:700"' : ''}>level ${l} ·
-        ${dp[l]} p.</a>`).join(' &nbsp;·&nbsp; ');
-  $('readInfo').innerHTML = shelves ?
-    ` translated so far${isBase() ? ' (generic)' : ''}: ${shelves}` :
-    ' no pages translated yet — run step 4';
-  if (!n && !shelves) { $('s5').classList.add('dis'); $('s6').classList.add('dis'); }
-  else { $('s5').classList.remove('dis'); $('s6').classList.toggle('dis', !n); }
+  const m = await api(`/books/${book}/map`);
+  const langq = '&langs=' + helpLangs().join(',');
+  // per (level,baseline) -> last-read page, for the "continue" marker
+  const cont = {};
+  (m.positions || []).forEach(p => cont[`${p.level}_${p.baseline}`] = p.page);
+  let any = false;
+  $('transMap').innerHTML = [0, 25, 50, 75].map(lv => {
+    const g = (m.levels[lv] || {}).guided || [];
+    const b = (m.levels[lv] || {}).base || [];
+    const pages = [...new Set([...g, ...b])].sort((a, c) => a - c);
+    if (pages.length) any = true;
+    const cells = pages.map(pg => {
+      const useBase = !g.includes(pg);             // baseline only if no guided
+      const isCont = cont[`${lv}_${useBase ? 1 : 0}`] === pg;
+      const href = `reader_site.html?book=${book}&level=${lv}`
+        + (useBase ? '&baseline=1' : '') + '&page=' + pg + langq;
+      return `<a class="cell on ${isCont ? 'cont' : ''}" href="${href}"
+        target="_blank" title="page ${pg}${isCont ? ' — continue' : ''}">${pg}</a>`;
+    }).join('');
+    return `<div class="shelf ${pages.length ? '' : 'empty'}">
+      <div class="sh-head"><span>${lv} · ${LEVEL_NAMES[lv]}</span>
+        <small>${pages.length ? pages.length + ' p.' : '—'}</small></div>
+      <div class="cells">${cells || '<small style="color:var(--muted)">'
+        + 'not translated — run step 4</small>'}</div></div>`;
+  }).join('');
+  $('readInfo').textContent = '';
+  $('s5').classList.toggle('dis', !any);
+  const n = ((isBase() ? (m.levels[level] || {}).base
+                       : (m.levels[level] || {}).guided) || []).length;
+  $('s6').classList.toggle('dis', !n);
 }
 function renderPdfModes(){
   $('pdfModes').innerHTML = PDF_MODES.map(([m, name, txt]) =>

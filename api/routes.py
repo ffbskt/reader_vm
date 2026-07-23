@@ -226,6 +226,18 @@ def get_positions(slug: str, level: int = None, baseline: bool = False,
         return {"page": db.position(user["id"], slug, level, baseline)}
     return {"positions": db.positions(user["id"], slug)}
 
+@router.get("/books/{slug}/map", tags=["reader"])
+def book_map(slug: str, user: dict = Depends(get_current_user)):
+    """Translation map: for each level, which pages are translated (guided +
+    baseline), plus the user's saved reading positions."""
+    levels = {}
+    for lv in pipeline.LEVELS:
+        levels[lv] = {"guided": pipeline.cached_pages(slug, lv, False),
+                      "base": pipeline.cached_pages(slug, lv, True)}
+    meta = pipeline._ensure_book_stats(pipeline.book_dir(slug))
+    return {"pages": meta.get("pages", 0), "levels": levels,
+            "positions": db.positions(user["id"], slug)}
+
 @router.get("/books/{slug}/vocabgap", tags=["vocab"])
 def vocab_gap(slug: str, user: dict = Depends(get_current_user)):
     """How many of this book's word types the user already knows vs. how
