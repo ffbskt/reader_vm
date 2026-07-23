@@ -418,12 +418,12 @@ coverage rises as the vocabulary grows.
       last-read page for a level/mode is outlined as the "continue" marker.
       Reading position (below) restores where you stopped.
       **Check:** PASSED live-local — 4 shelves with page cells, overlap −14px,
-      cells max-height 0 until hover, hrefs carry page=; nothing re-translated.
+      cells max-height 0 until hover, hrefs carry page=; nothing re-translated. 2026-07-22 refined: cells are page INTERVALS (41-71) not per-page squares.
 - [x] 2h.3 DONE 2026-07-22: reading position saved per (book, level, mode);
       reader resumes there on open (fixed reopen jumping to page 1); each
       level/mode remembers its own last page. reading_pos table +
       POST/GET /books/{slug}/position.
-      **Check:** PASSED — read to p43, reload -> resumes p43 (was p41).
+      **Check:** PASSED — read to p59 at normal speed, reload -> resumes p59. Fixed a save RACE (concurrent POSTs finished out of order, first page won) via debounce.
 
 - [ ] 2h.1x (superseded) Per-book translation MAP attached to each book: LEVELS
       0/25/50/75 top→bottom (rows) × book parts/pages left→right (columns);
