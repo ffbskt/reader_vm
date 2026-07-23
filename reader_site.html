@@ -126,8 +126,17 @@ function wrapWords(text, unkSet, dict){
     return `<span class="${cls}" data-w="${k}" data-t="${trText(tr)}">${w}</span>`;
   });
 }
+let posBook = '', posLevel = 0, posBase = 0;
+function savePos(){
+  if (!data || !data.pages || !data.pages[cur]) return;
+  fetch(`/books/${posBook}/position`, {method: 'POST',
+    headers: {...authHeaders(), 'Content-Type': 'application/json'},
+    body: JSON.stringify({level: posLevel, baseline: !!posBase,
+                          page: data.pages[cur].page})});
+}
 function render(){
   const p = data.pages[cur], dict = data.dictionary;
+  savePos();                     // remember where the reader is
   const unk = new Set();
   p.sentences.forEach(s => (s.unknown_after || []).forEach(w => unk.add(fold(w))));
   // group consecutive sentences by speaker, like the PDF
@@ -211,6 +220,7 @@ const authHeaders = () => localStorage.getItem('jwt') ?
   const base = qs.get('baseline') ? 1 : 0;
   const langs = qs.get('langs') || 'en,ru';
   const bq = (base ? '&baseline=1' : '') + '&langs=' + langs;
+  posBook = book; posLevel = +level; posBase = base;
   // level switcher: every level of THIS book with its translated-page count,
   // so a level mix-up is visible instead of looking like lost pages
   const bl = await fetch('/books', {headers: authHeaders()})
@@ -249,6 +259,21 @@ const authHeaders = () => localStorage.getItem('jwt') ?
   }
   document.getElementById('pageSel').innerHTML = data.pages.map((p, i) =>
     `<option value="${i}">page ${p.page}</option>`).join('');
+  // resume where the user last stopped (this level/mode), unless the URL
+  // pinned a specific page
+  if (!qs.get('page')){
+    const saved = await fetch(
+      `/books/${book}/position?level=${level}&baseline=${base}`,
+      {headers: authHeaders()}).then(r => r.json()).catch(() => ({}));
+    if (saved && saved.page){
+      const i = data.pages.findIndex(p => p.page === saved.page);
+      if (i >= 0) cur = i;
+    }
+  } else {
+    const i = data.pages.findIndex(p => p.page === +qs.get('page'));
+    if (i >= 0) cur = i;
+  }
+  document.getElementById('pageSel').value = cur;
   render();
 })();
 </script>

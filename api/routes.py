@@ -206,6 +206,26 @@ def promote_vocab(req: VocabReq, user: dict = Depends(get_current_user)):
     n = db.vocab_add(user["id"], req.lang, req.words[:2000], "known")
     return {"promoted": n, "counts": db.vocab_counts(user["id"], req.lang)}
 
+class PosReq(BaseModel):
+    level: int = 0
+    baseline: bool = False
+    page: int
+
+@router.post("/books/{slug}/position", tags=["reader"])
+def save_position(slug: str, req: PosReq,
+                  user: dict = Depends(get_current_user)):
+    """Remember the last page the user read at this level/mode."""
+    db.save_position(user["id"], slug, req.level, req.baseline, req.page)
+    return {"ok": True}
+
+@router.get("/books/{slug}/position", tags=["reader"])
+def get_positions(slug: str, level: int = None, baseline: bool = False,
+                  user: dict = Depends(get_current_user)):
+    """One saved page (with level+baseline) or all positions for the book."""
+    if level is not None:
+        return {"page": db.position(user["id"], slug, level, baseline)}
+    return {"positions": db.positions(user["id"], slug)}
+
 @router.get("/books/{slug}/vocabgap", tags=["vocab"])
 def vocab_gap(slug: str, user: dict = Depends(get_current_user)):
     """How many of this book's word types the user already knows vs. how

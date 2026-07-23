@@ -73,6 +73,15 @@ CREATE TABLE IF NOT EXISTS user_vocab(
   PRIMARY KEY(user_id, lang, word)
 );
 CREATE INDEX IF NOT EXISTS idx_vocab_user ON user_vocab(user_id, lang, state);
+CREATE TABLE IF NOT EXISTS reading_pos(
+  user_id INTEGER NOT NULL,
+  book_slug TEXT NOT NULL,
+  level INTEGER NOT NULL,
+  baseline INTEGER NOT NULL DEFAULT 0,
+  page INTEGER NOT NULL,
+  ts REAL NOT NULL,
+  PRIMARY KEY(user_id, book_slug, level, baseline)
+);
 """
 
 def get_db():
@@ -241,6 +250,30 @@ def vocab_add(user_id, lang, words, state="learning"):
                 (user_id, lang, w, state, now))
             n += cur.rowcount
     return n
+
+def save_position(user_id, book_slug, level, baseline, page):
+    with contextlib.closing(get_db()) as con, con:
+        con.execute(
+            "INSERT INTO reading_pos(user_id, book_slug, level, baseline, "
+            "page, ts) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id, book_slug, "
+            "level, baseline) DO UPDATE SET page=excluded.page, ts=excluded.ts",
+            (user_id, book_slug, level, 1 if baseline else 0, page, time.time()))
+
+def positions(user_id, book_slug):
+    with contextlib.closing(get_db()) as con, con:
+        rows = con.execute(
+            "SELECT level, baseline, page, ts FROM reading_pos WHERE "
+            "user_id=? AND book_slug=? ORDER BY ts DESC",
+            (user_id, book_slug)).fetchall()
+    return [dict(r) for r in rows]
+
+def position(user_id, book_slug, level, baseline):
+    with contextlib.closing(get_db()) as con, con:
+        r = con.execute(
+            "SELECT page FROM reading_pos WHERE user_id=? AND book_slug=? "
+            "AND level=? AND baseline=?",
+            (user_id, book_slug, level, 1 if baseline else 0)).fetchone()
+        return r["page"] if r else None
 
 def vocab_counts(user_id, lang):
     with contextlib.closing(get_db()) as con, con:
