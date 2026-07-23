@@ -126,13 +126,18 @@ function wrapWords(text, unkSet, dict){
     return `<span class="${cls}" data-w="${k}" data-t="${trText(tr)}">${w}</span>`;
   });
 }
-let posBook = '', posLevel = 0, posBase = 0;
+let posBook = '', posLevel = 0, posBase = 0, saveTimer = null;
 function savePos(){
-  if (!data || !data.pages || !data.pages[cur]) return;
-  fetch(`/books/${posBook}/position`, {method: 'POST',
-    headers: {...authHeaders(), 'Content-Type': 'application/json'},
-    body: JSON.stringify({level: posLevel, baseline: !!posBase,
-                          page: data.pages[cur].page})});
+  // debounce: only save the FINAL page after navigation settles, so rapid
+  // page-turns can't race and leave an earlier page saved
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (!data || !data.pages || !data.pages[cur]) return;
+    fetch(`/books/${posBook}/position`, {method: 'POST', keepalive: true,
+      headers: {...authHeaders(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({level: posLevel, baseline: !!posBase,
+                            page: data.pages[cur].page})});
+  }, 400);
 }
 function render(){
   const p = data.pages[cur], dict = data.dictionary;

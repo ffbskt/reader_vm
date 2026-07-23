@@ -134,11 +134,11 @@ a.readlink{color:var(--accent);font-weight:600}
 .shelf .cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px;
   max-height:0;overflow:hidden;transition:max-height .2s}
 .shelf:hover .cells{max-height:200px}
-.shelf .cell{width:26px;height:22px;border-radius:4px;background:var(--panel2);
-  color:var(--muted);font-size:.62rem;display:flex;align-items:center;
-  justify-content:center;border:1px solid transparent}
-.shelf .cell.on{background:var(--accent);color:var(--accent-ink);cursor:pointer}
-.shelf .cell.cont{outline:2px solid var(--unk);outline-offset:1px}
+.shelf .ivl{padding:3px 10px;border-radius:5px;background:var(--panel2);
+  color:var(--muted);font-size:.75rem;text-decoration:none;
+  font-variant-numeric:tabular-nums;border:1px solid transparent}
+.shelf .ivl.on{background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.shelf .ivl.cont{outline:2px solid var(--unk);outline-offset:1px;font-weight:600}
 .shelf.empty{opacity:.55}
 .vocabinfo{margin:-8px 0 18px;font-size:.95rem;color:var(--muted)}
 .vocabinfo b{color:var(--ink);font-variant-numeric:tabular-nums}
@@ -697,13 +697,24 @@ async function updateReadPdf(){
     const b = (m.levels[lv] || {}).base || [];
     const pages = [...new Set([...g, ...b])].sort((a, c) => a - c);
     if (pages.length) any = true;
-    const cells = pages.map(pg => {
-      const useBase = !g.includes(pg);             // baseline only if no guided
-      const isCont = cont[`${lv}_${useBase ? 1 : 0}`] === pg;
+    // group consecutive pages into intervals: [41..45] -> "41–45"
+    const iv = [];
+    for (const pg of pages){
+      const last = iv[iv.length - 1];
+      if (last && pg === last[1] + 1) last[1] = pg; else iv.push([pg, pg]);
+    }
+    const cont0 = cont[`${lv}_0`], cont1 = cont[`${lv}_1`];
+    const cells = iv.map(([a, c]) => {
+      const useBase = !g.includes(a);              // baseline only if no guided
+      const contPage = useBase ? cont1 : cont0;
+      const isCont = contPage != null && contPage >= a && contPage <= c;
+      const startPage = isCont ? contPage : a;     // resume inside the range
       const href = `reader_site.html?book=${book}&level=${lv}`
-        + (useBase ? '&baseline=1' : '') + '&page=' + pg + langq;
-      return `<a class="cell on ${isCont ? 'cont' : ''}" href="${href}"
-        target="_blank" title="page ${pg}${isCont ? ' — continue' : ''}">${pg}</a>`;
+        + (useBase ? '&baseline=1' : '') + '&page=' + startPage + langq;
+      const label = a === c ? a : `${a}–${c}`;
+      return `<a class="ivl on ${isCont ? 'cont' : ''}" href="${href}"
+        target="_blank" title="pages ${label}${isCont ? ' · continue at '
+        + contPage : ''}">${label}${isCont ? ' ▸' : ''}</a>`;
     }).join('');
     return `<div class="shelf ${pages.length ? '' : 'empty'}">
       <div class="sh-head"><span>${lv} · ${LEVEL_NAMES[lv]}</span>
